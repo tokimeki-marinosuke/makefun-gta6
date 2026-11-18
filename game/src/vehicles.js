@@ -15,6 +15,10 @@ function footprint({ x, y, heading }) {
   }));
 }
 
+export function touchesCar(car, target, radius) {
+  return footprint(car).some((point) => Math.hypot(point.x - target.x, point.y - target.y) < bodyRadius + radius);
+}
+
 export function createVehicles(world) {
   return { cars: world.parkedCars.map((car) => ({ ...car, speed: 0 })), active: null };
 }
@@ -36,7 +40,7 @@ export function toggleVehicle(world, vehicles, player, traffic = []) {
   const car = vehicles.active;
   if (!car) {
     vehicles.active = nearbyCar(vehicles, player);
-    return;
+    return vehicles.active;
   }
 
   const forwardX = Math.cos(car.heading);
@@ -73,15 +77,16 @@ export function drive(world, { active: car, cars }, { x: steer, y }, traffic = [
     y: car.y + Math.sin(heading) * speed * STEP,
     heading,
   };
-  const occupied = [...cars, ...traffic].filter((other) => other !== car &&
-    Math.hypot(other.x - next.x, other.y - next.y) < 2 * (bodyRadius + 13)).flatMap(footprint);
-  const blocked = footprint(next).some(({ x, y }) =>
+  const nearby = [...cars, ...traffic].filter((other) => other !== car &&
+    Math.hypot(other.x - next.x, other.y - next.y) < 2 * (bodyRadius + 13));
+  const body = footprint(next);
+  const impact = nearby.find((other) => body.some((point) => touchesCar(other, point, bodyRadius)));
+  const blocked = body.some(({ x, y }) =>
     x < bodyRadius || x > world.width - bodyRadius || y < bodyRadius ||
-    y > world.waterline - bodyRadius || hitsBuilding(world, x, y, bodyRadius) ||
-    occupied.some((point) => Math.hypot(point.x - x, point.y - y) < 2 * bodyRadius));
-  if (blocked) {
+    y > world.waterline - bodyRadius || hitsBuilding(world, x, y, bodyRadius));
+  if (blocked || impact) {
     car.speed = 0;
-    return;
+    return impact;
   }
   Object.assign(car, next, { speed });
 }

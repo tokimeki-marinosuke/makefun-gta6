@@ -22,6 +22,7 @@ export function drawCharacter(ctx, player) {
   ctx.translate(player.x, player.y);
   ellipse(2, 1, 15, 7, '#44334b50');
   ctx.scale(player.facing, 1);
+  if (player.down) ctx.rotate(Math.PI / 2);
   const appearance = player.appearance;
   const hair = appearance?.hair ?? '#573458';
   const navy = appearance?.outfit ?? '#353958';
@@ -42,7 +43,12 @@ export function drawCharacter(ctx, player) {
   }
   if (appearance?.style === 'bun') ellipse(-8, -43, 6, 6, hair);
   ellipse(-9, -15, 3.3, 5, skin);
-  ellipse(9, -15, 3.3, 5, skin);
+  if (player.swing > 7) {
+    shape([[7, -20], [21, -19], [21, -13], [7, -13]], navy);
+    ellipse(23, -16, 4, 3, skin);
+  } else {
+    ellipse(9, -15, 3.3, 5, skin);
+  }
   shape([[-7, -20], [7, -20], [11, -8], [4, -6], [-10, -8]], navy);
   ellipse(0, -20, 9, 7, '#fff2dc');
   shape([[-8, -24], [8, -24], [1, -16]], '#5c668c');

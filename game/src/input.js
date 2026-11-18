@@ -1,20 +1,20 @@
 const horizontal = [['KeyA', 'ArrowLeft'], ['KeyD', 'ArrowRight']];
 const vertical = [['KeyW', 'ArrowUp'], ['KeyS', 'ArrowDown']];
-const gameKeys = new Set([...horizontal.flat(), ...vertical.flat(), 'KeyE']);
+const gameKeys = new Set([...horizontal.flat(), ...vertical.flat(), 'KeyE', 'KeyF']);
 
 export function createInput() {
   const held = new Set();
-  let interact = false;
+  const pressed = new Set();
   window.addEventListener('keydown', (event) => {
     if (!gameKeys.has(event.code) || event.ctrlKey || event.metaKey || event.altKey) return;
     event.preventDefault();
-    if (event.code === 'KeyE' && !event.repeat && !held.has(event.code)) interact = true;
+    if ((event.code === 'KeyE' || event.code === 'KeyF') && !event.repeat && !held.has(event.code)) pressed.add(event.code);
     held.add(event.code);
   });
   window.addEventListener('keyup', (event) => held.delete(event.code));
   function clear() {
     held.clear();
-    interact = false;
+    pressed.clear();
   }
   window.addEventListener('blur', clear);
   document.addEventListener('visibilitychange', () => {
@@ -28,10 +28,7 @@ export function createInput() {
 
   return {
     direction: () => ({ x: axis(horizontal), y: axis(vertical) }),
-    takeInteract() {
-      const pressed = interact;
-      interact = false;
-      return pressed;
-    },
+    takeInteract: () => pressed.delete('KeyE'),
+    takeMelee: () => pressed.delete('KeyF'),
   };
 }

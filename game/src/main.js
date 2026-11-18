@@ -1,11 +1,13 @@
 import { DEFAULT_SEED, PLAYER, STEP, VIEW } from './config.js';
 import { createInput } from './input.js';
-import { createPedestrians, updatePedestrians } from './pedestrians.js';
+import { createPedestrians, knockDown, updatePedestrians } from './pedestrians.js';
+import { createPolice, updatePolice } from './police.js';
+import { createWanted, reportCrime, updateWanted } from './wanted.js';
 import { createRandom } from './random.js';
 import { cameraPosition, createRenderer } from './render.js';
 import { stageShot } from './shots.js';
 import { createTraffic, updateTraffic } from './traffic.js';
-import { createVehicles, drive, nearbyCar, toggleVehicle } from './vehicles.js';
+import { createVehicles, drive, nearbyCar, toggleVehicle, touchesCar } from './vehicles.js';
 import { canWalk, createWorld } from './world.js';
 
 const params = new URLSearchParams(window.location.search);
@@ -14,12 +16,26 @@ const seed = Number.isInteger(seedParam) ? seedParam : DEFAULT_SEED;
 const world = createWorld(createRandom(seed));
 const renderer = createRenderer(document.getElementById('game'));
 const player = { ...world.spawn };
-const vehicles = createVehicles(world);
-const population = {
-  traffic: createTraffic(vehicles, createRandom(seed ^ 0x41c64e6d)),
-  pedestrians: createPedestrians(world, createRandom(seed ^ 0x9e3779b9)),
-};
+let vehicles;
+let population;
+let wanted;
+let police;
+let contacts;
 const status = document.getElementById('status');
+
+function reset() {
+  Object.assign(player, world.spawn, { swing: 0 });
+  vehicles = createVehicles(world);
+  wanted = createWanted();
+  police = createPolice();
+  contacts = new Set();
+  population = {
+    traffic: createTraffic(vehicles, createRandom(seed ^ 0x41c64e6d)),
+    pedestrians: createPedestrians(world, createRandom(seed ^ 0x9e3779b9)),
+  };
+}
+
+reset();
 
 function walk({ x, y }) {
   const length = Math.hypot(x, y);
@@ -40,8 +56,80 @@ function updatePopulation(pose) {
   const margin = 140;
   const nearby = (entity) => entity.x >= x - margin && entity.x <= x + VIEW.width + margin &&
     entity.y >= y - margin && entity.y <= y + VIEW.height + margin;
-  updateTraffic(population.traffic, vehicles, pose, nearby);
+  updateTraffic(population.traffic, { ...vehicles, cars: [...vehicles.cars, ...police.cars] }, pose, nearby);
   updatePedestrians(world, population.pedestrians, vehicles.active, nearby);
+}
+
+function melee() {
+  if (vehicles.active || player.swing) return;
+  player.swing = 18;
+  const person = population.pedestrians.filter((other) => !other.down &&
+    Math.hypot(other.x - player.x, other.y - player.y) < 34)
+    .sort((a, b) => Math.hypot(a.x - player.x, a.y - player.y) -
+      Math.hypot(b.x - player.x, b.y - player.y))[0];
+  if (!person) return;
+  player.facing = Math.sign(person.x - player.x) || player.facing;
+  knockDown(person, player);
+  reportCrime(wanted, 'melee', player);
+}
+
+function updateContacts(impact, moved) {
+  const car = vehicles.active;
+  const target = car ?? player;
+  const overlapping = new Set();
+  for (const other of population.traffic) {
+    if (other === impact || (!car && touchesCar(other, player, PLAYER.radius))) {
+      overlapping.add(other);
+      if (!contacts.has(other) && (moved || impact)) reportCrime(wanted, 'traffic', target);
+    }
+  }
+  for (const person of population.pedestrians) {
+    const touching = car ? touchesCar(car, person, 7)
+      : Math.hypot(person.x - player.x, person.y - player.y) < 15;
+    if (!touching) continue;
+    overlapping.add(person);
+    if (contacts.has(person) || !moved || person.down) continue;
+    reportCrime(wanted, 'pedestrian', target);
+    if (car) knockDown(person, target);
+  }
+  contacts = overlapping;
+}
+
+function pursue(pose) {
+  const target = vehicles.active ?? pose;
+  const { visible, restrained } = updatePolice(world, police, wanted, target, Boolean(vehicles.active),
+    [...vehicles.cars, ...population.traffic]);
+  updateWanted(wanted, target, visible, restrained);
+}
+
+function draw(pose, canEnter) {
+  renderer.draw(world, pose, vehicles, population, canEnter, wanted, police.cars);
+}
+
+function tick(input, direction) {
+  const interact = input.takeInteract();
+  const attack = input.takeMelee();
+  if (wanted.busted) {
+    if (--wanted.busted === 0) reset();
+    return;
+  }
+  if (player.swing) player.swing -= 1;
+  if (interact) {
+    const car = toggleVehicle(world, vehicles, player, [...population.traffic, ...police.cars]);
+    if (car && !car.stolen) {
+      car.stolen = true;
+      reportCrime(wanted, 'theft', car);
+    }
+  }
+  if (attack) melee();
+  const target = vehicles.active ?? player;
+  const { x, y } = target;
+  let impact;
+  if (vehicles.active) impact = drive(world, vehicles, direction, [...population.traffic, ...police.cars]);
+  else walk(direction);
+  updateContacts(impact, target.x !== x || target.y !== y);
+  updatePopulation(player);
+  pursue(player);
 }
 
 function runGame() {
@@ -54,19 +142,18 @@ function runGame() {
     previousFrame = now;
     const direction = input.direction();
     while (accumulated >= STEP) {
-      if (input.takeInteract()) toggleVehicle(world, vehicles, player, population.traffic);
-      if (vehicles.active) drive(world, vehicles, direction, population.traffic);
-      else walk(direction);
-      updatePopulation(player);
+      tick(input, direction);
       accumulated -= STEP;
     }
     const canEnter = !vehicles.active && Boolean(nearbyCar(vehicles, player));
-    const message = vehicles.active
+    const message = wanted.busted ? 'BUSTED. Returning to the start.' : (vehicles.active
       ? 'Driving. Use WASD or the arrow keys. Press E to exit.'
       : canEnter ? 'Walk with WASD or the arrow keys. Press E to enter the nearby car.'
-        : 'Walk with WASD or the arrow keys. Approach a car to drive.';
+        : 'Walk with WASD or the arrow keys. Approach a car to drive.') +
+      (vehicles.active ? '' : ' Press F to shove.') +
+      (wanted.stars ? ` Wanted level ${wanted.stars} of 5.` : '');
     if (status.textContent !== message) status.textContent = message;
-    renderer.draw(world, player, vehicles, population, canEnter);
+    draw(player, canEnter);
     requestAnimationFrame(frame);
   }
 
@@ -74,11 +161,17 @@ function runGame() {
 }
 
 if (params.has('shot')) {
-  const pose = stageShot(params.get('shot'), world, vehicles, updatePopulation);
+  const pose = stageShot(params.get('shot'), world, vehicles, updatePopulation, {
+    startPursuit(car) {
+      reportCrime(wanted, 'theft', car);
+      reportCrime(wanted, 'pedestrian', car);
+    },
+    pursue,
+  });
   requestAnimationFrame(() => {
-    renderer.draw(world, pose, vehicles, population);
+    draw(pose);
     requestAnimationFrame(() => {
-      renderer.draw(world, pose, vehicles, population);
+      draw(pose);
       window.__shotReady = true;
     });
   });

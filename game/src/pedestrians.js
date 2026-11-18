@@ -36,10 +36,23 @@ export function createPedestrians(world, random) {
   });
 }
 
+export function knockDown(person, source) {
+  const ahead = sidewalkPosition(person.block, (person.distance + 18) % person.perimeter, 0);
+  const behind = sidewalkPosition(person.block, (person.distance - 18 + person.perimeter) % person.perimeter, 0);
+  const gap = ({ x, y }) => Math.hypot(x - source.x, y - source.y);
+  person.direction = gap(ahead) >= gap(behind) ? 1 : -1;
+  person.down = 42;
+  person.evade = 120;
+}
+
 export function updatePedestrians(world, pedestrians, car, nearby) {
   const projectedX = car && car.x + Math.cos(car.heading) * car.speed * 0.24;
   const projectedY = car && car.y + Math.sin(car.heading) * car.speed * 0.24;
   for (const person of pedestrians) {
+    if (person.down) {
+      person.down -= 1;
+      continue;
+    }
     if (!nearby(person)) continue;
     const { block, perimeter } = person;
     const wrap = (distance) => (distance + perimeter) % perimeter;
@@ -51,7 +64,7 @@ export function updatePedestrians(world, pedestrians, car, nearby) {
       person.direction = Math.hypot(ahead.x - projectedX, ahead.y - projectedY) >=
         Math.hypot(behind.x - projectedX, behind.y - projectedY) ? 1 : -1;
     }
-    person.evade = danger ? 36 : Math.max(0, person.evade - 1);
+    person.evade = Math.max(danger ? 36 : 0, person.evade - 1);
     const distance = wrap(person.distance + person.direction * (person.evade ? 92 : person.speed) * STEP);
     let offset = person.evade ? Math.min(8, person.offset + 0.6) : Math.max(0, person.offset - 0.4);
     let pose = sidewalkPosition(block, distance, offset);

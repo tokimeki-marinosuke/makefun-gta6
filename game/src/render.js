@@ -1,6 +1,7 @@
 import { CITY, CITY_GRID, PALETTE, VIEW } from './config.js';
 import { drawCharacter } from './character.js';
 import { CAR } from './vehicles.js';
+import { ARREST_FRAMES } from './wanted.js';
 
 const { columns, rows, tile, road } = CITY_GRID;
 const roofs = ['#e8a68b', '#f1d3a1', '#c1d7c6', '#c9b5cd', '#d9b394'];
@@ -189,7 +190,7 @@ export function createRenderer(canvas) {
     if (style === 3) star(x + w / 2, y + roofDepth / 2, 9, '#fff1c8');
   }
 
-  function drawCar({ x, y, heading, color }, active) {
+  function drawCar({ x, y, heading, color, police, flash }, active) {
     const halfLength = CAR.length / 2;
     const halfWidth = CAR.width / 2;
     ellipse(x + 3, y + 4, 18, 10, '#423b4e60');
@@ -201,12 +202,20 @@ export function createRenderer(canvas) {
     }
     ctx.beginPath();
     ctx.roundRect(-halfLength, -halfWidth, CAR.length, CAR.width, 4);
-    ctx.fillStyle = color;
+    ctx.fillStyle = police ? '#222b38' : color;
     ctx.fill();
+    if (police) rect(-9, -9, 19, 18, '#fff6e8');
     rect(-11, -7, 20, 14, '#35495d');
-    rect(-6, -6, 11, 12, color);
+    rect(-6, -6, 11, 12, police ? '#fff6e8' : color);
     rect(-5, -5, 9, 2, '#fff1d799');
     rect(8, -7, 2, 14, '#7fabb4');
+    if (police) {
+      if (flash) ellipse(0, -7, 9, 6, '#ff375d55');
+      else ellipse(0, 7, 9, 6, '#378dff66');
+      rect(-3, -8, 6, 16, '#263348');
+      rect(-2, -7, 4, 6, flash ? '#ff4160' : '#a92f52');
+      rect(-2, 1, 4, 6, flash ? '#315eae' : '#59adff');
+    }
     for (const side of [-6, 4]) {
       rect(17, side, 3, 2, active ? '#fffad3' : '#eadabf');
       rect(-20, side, 2, 2, '#8e3b4d');
@@ -214,7 +223,7 @@ export function createRenderer(canvas) {
     ctx.restore();
   }
 
-  function hud(world, player, driving, canEnter) {
+  function hud(world, player, driving, canEnter, live) {
     const area = player.y >= world.cityEnd ? 'Sundial Beach'
       : Math.hypot(player.x - world.locations.plaza.x, player.y - world.locations.plaza.y) < 145
         ? 'Meridian Observatory' : 'Meridian District';
@@ -239,14 +248,15 @@ export function createRenderer(canvas) {
     ellipse(mx(player.x), my(player.y), 4, 4, PALETTE.ink);
     ellipse(mx(player.x), my(player.y), 2.4, 2.4, '#fff4d8');
 
+    const actions = live ? '  ·  F SHOVE' : '';
     const controls = driving ? 'WASD / ARROW KEYS  ·  E EXIT'
-      : canEnter ? 'WASD / ARROW KEYS  ·  E ENTER' : 'WASD / ARROW KEYS';
+      : (canEnter ? 'WASD / ARROW KEYS  ·  E ENTER' : 'WASD / ARROW KEYS') + actions;
     ctx.font = '600 12px system-ui';
     rect(18, VIEW.height - 42, ctx.measureText(controls).width + 22, 24, '#27374bed');
     label(controls, 29, VIEW.height - 26, '600 12px system-ui', '#fff1d7');
   }
 
-  function draw(world, player, { cars, active }, { traffic, pedestrians }, canEnter = false) {
+  function draw(world, player, { cars, active }, { traffic, pedestrians }, canEnter, wanted, patrols) {
     const target = active ?? player;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     rect(0, 0, canvas.width, canvas.height, PALETTE.backdrop);
@@ -271,7 +281,7 @@ export function createRenderer(canvas) {
     const inView = ({ x, y }, margin) => x >= cameraX - margin &&
       x <= cameraX + VIEW.width + margin && y >= cameraY - margin &&
       y <= cameraY + VIEW.height + margin;
-    for (const car of [...cars, ...traffic]) {
+    for (const car of [...cars, ...traffic, ...patrols]) {
       if (inView(car, CAR.length)) {
         layers.push({ depth: car.y, draw: () => drawCar(car, car === active) });
       }
@@ -283,7 +293,22 @@ export function createRenderer(canvas) {
     layers.sort((a, b) => a.depth - b.depth);
     for (const layer of layers) layer.draw();
     ctx.restore();
-    hud(world, target, Boolean(active), canEnter);
+    hud(world, target, Boolean(active), canEnter, canEnter !== undefined);
+    if (wanted.stars) {
+      const center = VIEW.width / 2;
+      rect(center - 80, 17, 160, 36, '#27374bed');
+      for (let i = 0; i < 5; i += 1) {
+        star(center + (i - 2) * 28, 35, 11, i < wanted.stars ? '#ffd388' : '#6c7483');
+      }
+      if (wanted.arrest) {
+        rect(center - 80, 55, 160, 5, '#27374bed');
+        rect(center - 80, 55, 160 * wanted.arrest / ARREST_FRAMES, 5, '#ff6179');
+      }
+    }
+    if (wanted.busted) {
+      rect(0, 0, VIEW.width, VIEW.height, '#1c2236dc');
+      label('BUSTED', VIEW.width / 2, VIEW.height / 2, 'bold 62px system-ui', '#ff7282', 'center');
+    }
     ctx.restore();
   }
 
