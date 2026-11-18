@@ -1,0 +1,23 @@
+# Dependencies
+node_modules/
+
+# Local Codex home: credentials, auth.json, session recordings
+.codex/
+
+# Run ledgers, event logs, last-message files
+runs/
+
+# Smoke-test artifacts
+smoke_test/
+
+# Build / grader output
+output/
+dist/
+
+# Secrets and local config
+.env
+.env.*
+
+# Misc
+*.log
+.DS_Store
