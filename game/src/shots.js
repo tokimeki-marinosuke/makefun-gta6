@@ -22,15 +22,17 @@ export function stageShot(name, world, vehicles, updatePopulation, chase) {
   }
   if (name === 'police-chase') {
     const car = vehicles.cars[0];
-    Object.assign(car, { x: streetX[3] + 65, y: streetY[2], heading: 0 });
+    Object.assign(car, { x: streetX[3] + 170, y: streetY[2] + 21, heading: 0 });
     vehicles.active = car;
     chase.startPursuit(car);
-    // Let the patrols close in, then accelerate east and steer north.
-    // Freeze with the trailing unit and both cross-street units in frame.
-    for (let tick = 0; tick < 151; tick += 1) {
-      if (tick >= 95) drive(world, vehicles, { x: tick >= 133 ? -1 : 0, y: -1 });
+    // Let the patrols close in, then accelerate east along the south lane.
+    // Freeze as two units converge in the red phase of their light bars.
+    for (let tick = 0; tick < 187; tick += 1) {
+      if (tick >= 118) drive(world, vehicles, { x: 0, y: -1 });
       chase.pursue(world.spawn);
     }
+    // Advance the seeded pedestrians past the center while holding the pursuit pose.
+    for (let tick = 0; tick < 182; tick += 1) updatePopulation(world.spawn);
     return world.spawn;
   }
   if (name === 'coast-drive') {
