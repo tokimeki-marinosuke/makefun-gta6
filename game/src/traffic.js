@@ -1,41 +1,48 @@
-import { CITY_GRID, PLAYER, STEP } from './config.js';
+import { cityEnd, cityWidth, CITY_GRID, hasVerticalSegment, horizontalWidth, isBoulevard, PLAYER, STEP,
+  streetWidthsX, streetX, streetY } from './config.js';
 import { createRandom } from './random.js';
 import { CAR } from './vehicles.js';
 
-const { columns, rows, tile, road } = CITY_GRID;
-const lane = 13;
-const approach = road / 2;
-const laneLength = tile - 2 * approach;
-const stopLine = laneLength - 36;
+const { columns, rows } = CITY_GRID;
 const directions = [[1, 0], [0, 1], [-1, 0], [0, -1]];
 const colors = ['#c15b50', '#5d849f', '#e0ad55', '#4c8b79', '#936c9d', '#e8dbbf'];
 
-function point(x, y, direction, distance) {
+function point(x, y, direction, distance, lane) {
   const [dx, dy] = directions[direction];
   return { x: x + dx * distance - dy * lane, y: y + dy * distance + dx * lane };
 }
 
-function buildRoads(parkedCars) {
+export function buildRoads(parkedCars) {
   const nodes = Array.from({ length: (rows + 1) * (columns + 1) }, (_, index) => ({
-    x: index % (columns + 1) * tile,
-    y: Math.floor(index / (columns + 1)) * tile,
+    x: streetX[index % (columns + 1)],
+    y: streetY[Math.floor(index / (columns + 1))],
     edges: [],
   }));
-  for (const node of nodes) {
+  for (const [index, node] of nodes.entries()) {
     for (const [direction, [dx, dy]] of directions.entries()) {
-      const column = node.x / tile + dx;
-      const row = node.y / tile + dy;
+      const fromColumn = index % (columns + 1);
+      const fromRow = Math.floor(index / (columns + 1));
+      const column = fromColumn + dx;
+      const row = fromRow + dy;
       if (column < 0 || column > columns || row < 0 || row > rows) continue;
-      const middle = point(node.x, node.y, direction, tile / 2);
-      if (middle.x < 0 || middle.x > columns * tile || middle.y < 0) continue;
+      if (dy && !hasVerticalSegment(column, Math.min(row, fromRow))) continue;
+      const end = nodes[row * (columns + 1) + column];
+      const distance = Math.hypot(end.x - node.x, end.y - node.y);
+      const boulevard = dx !== 0 && isBoulevard(row, (node.x + end.x) / 2);
+      const lane = boulevard ? 23 : 13;
+      const middle = point(node.x, node.y, direction, distance / 2, lane);
+      if (middle.x < 0 || middle.x > cityWidth || middle.y < 0 ||
+          middle.y > cityEnd - CAR.width / 2) continue;
       const blocked = parkedCars.some((car) =>
         Math.abs((car.x - middle.x) * dy - (car.y - middle.y) * dx) < CAR.width &&
-        Math.abs((car.x - middle.x) * dx + (car.y - middle.y) * dy) < tile / 2 + CAR.length / 2);
+        Math.abs((car.x - middle.x) * dx + (car.y - middle.y) * dy) < distance / 2 + CAR.length / 2);
       if (blocked) continue;
-      const end = nodes[row * (columns + 1) + column];
-      node.edges.push({ direction, end,
-        start: point(node.x, node.y, direction, approach),
-        finish: point(end.x, end.y, direction, -approach) });
+      const approach = dx ? streetWidthsX[fromColumn] / 2 : horizontalWidth(fromRow, middle.x) / 2;
+      const departure = dx ? streetWidthsX[column] / 2 : horizontalWidth(row, middle.x) / 2;
+      const length = distance - approach - departure;
+      node.edges.push({ direction, from: node, end, length, speedMultiplier: boulevard ? 1.5 : 1,
+        start: point(node.x, node.y, direction, approach, lane),
+        finish: point(end.x, end.y, direction, -departure, lane) });
     }
   }
   // Keep lanes with a continuation through the junction. Parked cars can close
@@ -72,13 +79,13 @@ function turnBetween(edge, next) {
 
 function poseOn(car, distance) {
   const { edge, turn } = car;
-  if (distance < laneLength) {
+  if (distance < edge.length) {
     return {
       x: edge.start.x + directions[edge.direction][0] * distance,
       y: edge.start.y + directions[edge.direction][1] * distance,
       heading: edge.direction * Math.PI / 2 };
   }
-  const t = Math.min(1, (distance - laneLength) / turn.length);
+  const t = Math.min(1, (distance - edge.length) / turn.length);
   const u = 1 - t;
   const { start, finish, control } = turn;
   const heading = Math.atan2(
@@ -91,8 +98,8 @@ function poseOn(car, distance) {
   const halfWidth = (CAR.length * cos + CAR.width * sin) / 2 + 0.01;
   const halfHeight = (CAR.length * sin + CAR.width * cos) / 2 + 0.01;
   return {
-    x: Math.max(halfWidth, Math.min(x, columns * tile - halfWidth)),
-    y: Math.max(halfHeight, Math.min(y, rows * tile + approach - halfHeight)),
+    x: Math.max(halfWidth, Math.min(x, cityWidth - halfWidth)),
+    y: Math.max(halfHeight, Math.min(y, cityEnd - halfHeight)),
     heading,
   };
 }
@@ -148,6 +155,7 @@ export function updateTraffic(cars, vehicles, player, nearbyView) {
       car.junction = null;
     }
     const junction = car.edge.end;
+    const stopLine = car.edge.length - 36;
     if (!junction.occupant && car.distance >= stopLine - 1 &&
         !cars.some((other) => other.edge === car.next && other.distance < 76)) {
       junction.occupant = car;
@@ -156,7 +164,7 @@ export function updateTraffic(cars, vehicles, player, nearbyView) {
     const limit = junction.occupant === car ? Infinity : stopLine;
     const nearby = obstacles.filter((other) => other !== car &&
       Math.abs(car.x - other.x) < 108 && Math.abs(car.y - other.y) < 108);
-    let desired = Math.min(car.cruise, Math.sqrt(2 * 220 * Math.max(0, limit - car.distance)));
+    let desired = Math.min(car.cruise * car.edge.speedMultiplier, Math.sqrt(2 * 220 * Math.max(0, limit - car.distance)));
     for (const ahead of [8, 20, 34, 50]) {
       if (!blocked(poseOn(car, car.distance + ahead), nearby, walking)) continue;
       desired = Math.min(desired, (ahead - 8) * 2);
@@ -171,7 +179,7 @@ export function updateTraffic(cars, vehicles, player, nearbyView) {
     }
     car.distance = nextDistance;
     Object.assign(car, pose);
-    const segmentLength = laneLength + car.turn.length;
+    const segmentLength = car.edge.length + car.turn.length;
     if (car.distance >= segmentLength) {
       car.distance -= segmentLength;
       car.edge = car.next;

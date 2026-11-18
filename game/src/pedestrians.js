@@ -11,20 +11,23 @@ const outfits = [
 ];
 
 function sidewalkPosition(block, distance, offset) {
-  const side = block.size - 2 * inset;
-  const edge = Math.floor(distance / side);
-  const along = distance % side;
+  const width = block.width - 2 * inset;
+  const depth = block.depth - 2 * inset;
   const near = inset + offset;
-  const far = block.size - near;
-  const tangent = Math.max(near, Math.min(far, inset + along));
-  const position = [[tangent, near], [far, tangent],
-    [block.size - tangent, far], [near, block.size - tangent]][edge];
+  const right = block.width - near;
+  const bottom = block.depth - near;
+  const horizontal = (along) => Math.max(near, Math.min(right, inset + along));
+  const vertical = (along) => Math.max(near, Math.min(bottom, inset + along));
+  const position = distance < width ? [horizontal(distance), near] :
+    distance < width + depth ? [right, vertical(distance - width)] :
+    distance < 2 * width + depth ? [horizontal(2 * width + depth - distance), bottom] :
+    [near, vertical(2 * (width + depth) - distance)];
   return { x: block.x + position[0], y: block.y + position[1] };
 }
 
 export function createPedestrians(world, random) {
   return world.blocks.flatMap((block) => {
-    const perimeter = 4 * (block.size - 2 * inset);
+    const perimeter = 2 * (block.width + block.depth - 4 * inset);
     const count = block.kind === 'buildings' ? 2 : 3;
     return Array.from({ length: count }, (_, index) => {
       const distance = perimeter * (index + random() * 0.7) / count;

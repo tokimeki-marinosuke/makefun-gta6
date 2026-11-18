@@ -1,4 +1,4 @@
-import { CITY, PALETTE, VIEW } from './config.js';
+import { CITY, PALETTE, spur, VIEW } from './config.js';
 import { districtAtPosition, districts } from './districts.js';
 import { drawMissionHud, drawMissionMapMarker } from './mission-render.js';
 import { ARREST_FRAMES } from './wanted.js';
@@ -51,9 +51,14 @@ export function drawHud(ctx, world, player, { driving, canEnter, wanted, mission
   rect(map.x, my(world.cityEnd), map.w, my(world.waterline) - my(world.cityEnd), PALETTE.sand);
   rect(map.x, my(world.waterline), map.w, my(world.height) - my(world.waterline), PALETTE.sea);
   for (const block of world.blocks) {
-    rect(mx(block.x), my(block.y), block.size / world.width * map.w,
-      block.size / world.height * map.h, districts[block.district].mapColor);
+    rect(mx(block.x), my(block.y), block.width / world.width * map.w,
+      block.depth / world.height * map.h, districts[block.district].mapColor);
   }
+  const spurMap = '#bcab97';
+  rect(mx(spur.x), my(spur.y - spur.width / 2),
+    mx(spur.endX) - mx(spur.x), my(spur.y + spur.width / 2) - my(spur.y - spur.width / 2), spurMap);
+  ellipse(mx(spur.endX), my(spur.y), spur.radius * map.w / world.width,
+    spur.radius * map.h / world.height, spurMap);
   star(mx(world.locations.plaza.x + 75), my(world.locations.plaza.y), 6.5, PALETTE.ink);
   star(mx(world.locations.plaza.x + 75), my(world.locations.plaza.y), 5, '#ffe39c');
   if (marker) drawMissionMapMarker(ctx, mx(marker.x), my(marker.y));

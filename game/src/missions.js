@@ -52,7 +52,7 @@ export function startMission(state, world, vehicles, wanted, target) {
   state.story = { heading: mission.title, text: mission.start, frames: introFrames };
   if (state.index === 1) {
     const { x, y } = world.locations.plaza;
-    state.car = { x, y: y - 79, heading: Math.PI / 2, color: '#654ba8', speed: 0 };
+    state.car = { x, y: y - 65, heading: Math.PI / 2, color: '#654ba8', speed: 0 };
     vehicles.cars.push(state.car);
   }
   if (state.index === 2) reportCrime(wanted, 'vehicleRecovery', target);

@@ -1,4 +1,4 @@
-import { CITY_GRID, PALETTE, VIEW } from './config.js';
+import { blockRect, CITY_GRID, hasVerticalSegment, horizontalWidth, isBoulevard, PALETTE, spur, streetWidthsX, streetX, streetY, VIEW } from './config.js';
 import { districtAt, districts } from './districts.js';
 import { drawCharacter, PROTAGONIST_SCALE } from './character.js';
 import { drawMissionMarker } from './mission-render.js';
@@ -6,7 +6,7 @@ import { CAR } from './vehicles.js';
 import { drawHud } from './hud.js';
 import { drawTitleBackdrop } from './title.js';
 
-const { columns, rows, tile, road } = CITY_GRID;
+const { columns, rows } = CITY_GRID;
 const protagonistStyle = { scale: PROTAGONIST_SCALE, outfit: '#ad287f' };
 
 export function cameraPosition(world, target) {
@@ -145,57 +145,96 @@ export function createRenderer(canvas) {
   }
 
   function roads(world) {
-    const half = road / 2;
     // Each half of a shared street takes its surface from the adjacent block.
-    for (const block of world.blocks) {
-      const { x, y, district } = block;
-      const { surface } = districts[district].road;
-      const right = block.column === columns - 1 ? half : 0;
-      const bottom = block.row === rows - 1 ? half : 0;
-      rect(x - half, y - half, tile + right, tile + bottom, surface);
+    for (const { column, row, district, endColumn = column + 1 } of world.blocks) {
+      const x = streetX[column];
+      const y = streetY[row];
+      const right = streetX[endColumn];
+      const bottom = row === rows - 1 ? world.cityEnd : streetY[row + 1];
+      rect(x, y, right - x, bottom - y, districts[district].road.surface);
     }
     for (let row = 0; row <= rows; row += 1) {
       for (let column = 0; column <= columns; column += 1) {
-        const x = column * tile;
-        const y = row * tile;
+        const x = streetX[column];
+        const y = streetY[row];
+        const nextX = streetX[column + 1];
+        const nextY = streetY[row + 1];
         const { marking, dash } = districts[districtAt(Math.min(column, columns - 1), Math.min(row, rows - 1))].road;
-        for (let offset = 43; offset <= tile - 43; offset += 29) {
-          if (column < columns) rect(x + offset, y - 1, dash, 2, marking);
-          if (row < rows) rect(x - 1, y + offset, 2, dash, marking);
+        const wide = isBoulevard(row, (x + nextX) / 2);
+        if (wide) {
+          rect(x + 42, y - 6, nextX - x - 84, 12, '#d4bb93');
+          rect(x + 44, y - 4, nextX - x - 88, 8, '#536b68');
+          for (let lamp = x + 69; lamp < nextX - 49; lamp += 50) {
+            star(lamp, y, 6, '#fff0b5');
+          }
         }
-        for (let stripe = -19; stripe <= 19; stripe += 7) {
-          if (column < columns) rect(x + 27, y + stripe, 10, 3, marking);
-          if (column > 0) rect(x - 37, y + stripe, 10, 3, marking);
-          if (row < rows) rect(x + stripe, y + 27, 3, 10, marking);
-          if (row > 0) rect(x + stripe, y - 37, 3, 10, marking);
+        for (let mark = x + 43; mark + dash <= nextX - 38; mark += 29) {
+          for (const offset of wide ? [-14, 14] : [0]) rect(mark, y + offset - 1, dash, 2, marking);
+        }
+        for (let mark = y + horizontalWidth(row, x) / 2 + 16;
+          hasVerticalSegment(column, row) && mark + dash <= nextY - horizontalWidth(row + 1, x) / 2 - 11; mark += 29) {
+          rect(x - 1, mark, 2, dash, marking);
+        }
+        const half = streetWidthsX[column] / 2;
+        const westHalf = horizontalWidth(row, x - half) / 2;
+        const eastHalf = horizontalWidth(row, x + half) / 2;
+        for (let stripe = -eastHalf + 8; column < columns && stripe <= eastHalf - 6; stripe += 7) {
+          rect(x + half, y + stripe, 10, 3, marking);
+        }
+        for (let stripe = -westHalf + 8; column > 0 && stripe <= westHalf - 6; stripe += 7) {
+          rect(x - half - 10, y + stripe, 10, 3, marking);
+        }
+        for (let stripe = -half + 8; stripe <= half - 6; stripe += 7) {
+          const setback = horizontalWidth(row, x + stripe) / 2;
+          if (hasVerticalSegment(column, row)) rect(x + stripe, y + setback, 3, 10, marking);
+          if (hasVerticalSegment(column, row - 1)) rect(x + stripe, y - setback - 10, 3, 10, marking);
         }
       }
     }
   }
 
   function blockGround(block) {
-    const { x, y, size, kind, plant, district } = block;
+    const { x, y, width, depth, kind, plant, district } = block;
     const { curb, ground, garden, road: street, props } = districts[district];
     const shoulder = street.shoulder ?? 0;
-    rect(x, y, size, size, street.surface);
+    rect(x, y, width, depth, street.surface);
     ctx.strokeStyle = street.edge;
     ctx.lineWidth = district === 'downtown' ? 2 : 1;
     const edgeInset = shoulder ? shoulder - 2 : -2;
-    ctx.strokeRect(x + edgeInset, y + edgeInset, size - 2 * edgeInset, size - 2 * edgeInset);
-    rect(x + shoulder, y + shoulder, size - 2 * shoulder, size - 2 * shoulder, curb);
-    rect(x + shoulder + 2, y + shoulder + 2, size - 2 * shoulder - 4, size - 2 * shoulder - 4, ground);
+    ctx.strokeRect(x + edgeInset, y + edgeInset, width - 2 * edgeInset, depth - 2 * edgeInset);
+    rect(x + shoulder, y + shoulder, width - 2 * shoulder, depth - 2 * shoulder, curb);
+    rect(x + shoulder + 2, y + shoulder + 2, width - 2 * shoulder - 4, depth - 2 * shoulder - 4, ground);
 
     if (district === 'residential') {
-      for (const [lotX, lotY] of districts.residential.buildings.lots) {
-        rect(x + lotX - 6, y + lotY - 6, 53, 57, garden);
-        rect(x + lotX + 14, y + lotY + 32, 6, 19, curb);
+      const end = block.endColumn ?? block.column + 1;
+      for (let column = block.column; column < end; column += 1) {
+        const gardenX = blockRect(column, block.row).x;
+        for (const [lotX, lotY] of districts.residential.buildings.lots) {
+          rect(gardenX + lotX - 6, y + lotY - 6, 53, 57, garden);
+          rect(gardenX + lotX + 14, y + lotY + 32, 6, 19, curb);
+        }
       }
     }
+    if (block.plaza) {
+      const { x, y, width, depth } = block.plaza;
+      const cx = x + width / 2;
+      const cy = y + depth / 2;
+      rect(x, y, width, depth, '#a98fa9');
+      for (let tile = 0; tile < depth; tile += 16) rect(x, y + tile, width, 1, '#cdb4c4');
+      for (let tile = 0; tile < width; tile += 17) rect(x + tile, y, 1, depth, '#cdb4c4');
+      for (const tx of [x + 24, x + width - 24]) {
+        tree(tx, y + 33, plant);
+        tree(tx, y + depth - 26, plant);
+      }
+      ellipse(cx, cy, 40, 33, '#d8c5d0');
+      ellipse(cx, cy, 35, 28, '#518b98');
+      star(cx, cy, 24, '#fff0b5');
+    }
     if (district === 'academy') {
-      rect(x + 11, y + 11, size - 22, size - 22, garden);
+      rect(x + 11, y + 11, width - 22, depth - 22, garden);
       const pathX = kind === 'observatory' ? 48 : 86;
-      rect(x + pathX, y + 11, 27, size - 22, curb);
-      rect(x + 11, y + 140, size - 22, 24, curb);
+      rect(x + pathX, y + 11, 27, depth - 22, curb);
+      rect(x + 11, y + 140, width - 22, 24, curb);
       if (kind !== 'observatory') {
         const [mx, my] = props.monument;
         ellipse(x + mx, y + my, 18, 14, curb);
@@ -351,6 +390,12 @@ export function createRenderer(canvas) {
     roads(world);
     coast(world);
     for (const block of world.blocks) blockGround(block);
+    const spurRoad = districts.residential.road;
+    for (const [border, color] of [[2, spurRoad.edge], [0, spurRoad.surface]]) {
+      rect(spur.x + streetWidthsX[spur.column] / 2 - 2, spur.y - spur.width / 2 - border,
+        spur.endX - spur.x - streetWidthsX[spur.column] / 2 + 2, spur.width + 2 * border, color);
+      ellipse(spur.endX, spur.y, spur.radius + border, spur.radius + border, color);
+    }
     const visible = world.buildings.filter(({ x, y, width, depth, height }) =>
       x + width + height >= cameraX && x <= cameraX + VIEW.width &&
       y + depth + height >= cameraY && y - height <= cameraY + VIEW.height);
@@ -359,7 +404,7 @@ export function createRenderer(canvas) {
       draw: () => drawBuilding(building),
     }));
     const harborCrane = districts.harbor.props.crane;
-    const craneBlock = world.blocks[harborCrane.row * columns + harborCrane.column];
+    const craneBlock = world.blocks.find(({ column, row }) => column === harborCrane.column && row === harborCrane.row);
     const craneX = craneBlock.x + harborCrane.x;
     const craneY = craneBlock.y + harborCrane.y;
     layers.push({ depth: craneBlock.y + 120, draw: () => crane(craneX, craneY, harborCrane.color) });

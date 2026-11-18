@@ -1,4 +1,4 @@
-import { CITY_GRID } from './config.js';
+import { streetX, streetY } from './config.js';
 
 // North to south, with one entry per city block.
 const layout = [
@@ -83,10 +83,11 @@ export function districtAt(column, row) {
 }
 
 export function districtAtPosition({ x, y }) {
-  const { columns, rows, tile } = CITY_GRID;
   // Follow the road colors: the grid lines divide shared streets in half.
   // The southernmost row also supplies the district for the beach.
-  const column = Math.min(columns - 1, Math.max(0, Math.floor(x / tile)));
-  const row = Math.min(rows - 1, Math.max(0, Math.floor(y / tile)));
+  const cell = (centers, value) => Math.min(centers.length - 2,
+    Math.max(0, centers.findLastIndex((center) => value >= center)));
+  const column = cell(streetX, x);
+  const row = cell(streetY, y);
   return districts[districtAt(column, row)];
 }
