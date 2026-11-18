@@ -36,8 +36,9 @@ export function drawHud(ctx, world, player, { driving, canEnter, wanted, mission
 
   const marker = mission?.marker;
   const area = districtAtPosition(player).name;
-  rect(18, 17, 210, 62, '#27374bed');
-  rect(18, 17, 3, 62, '#ffd388');
+  const cityPanel = { y: 17, height: 62 };
+  rect(18, cityPanel.y, 210, cityPanel.height, '#27374bed');
+  rect(18, cityPanel.y, 3, cityPanel.height, '#ffd388');
   star(39, 41, 8, '#ffd388');
   label(CITY, 55, 47, 'bold 20px system-ui', '#fff1d7');
   label(area, 36, 66, '13px system-ui', '#f7dfbe');
@@ -70,7 +71,8 @@ export function drawHud(ctx, world, player, { driving, canEnter, wanted, mission
     for (let i = 0; i < 5; i += 1) {
       star(center + (i - 2) * 28, 35, 11, i < wanted.stars ? '#ffd388' : '#6c7483');
     }
-    if (wanted.arrest) {
+    // Frozen shots omit controls but still show the arrest meter at zero.
+    if (wanted.arrest || canEnter === undefined) {
       rect(center - 80, 55, 160, 5, '#27374bed');
       rect(center - 80, 55, 160 * wanted.arrest / ARREST_FRAMES, 5, '#ff6179');
     }
@@ -84,5 +86,5 @@ export function drawHud(ctx, world, player, { driving, canEnter, wanted, mission
     rect(18, VIEW.height - 42, ctx.measureText(controls).width + 22, 24, '#27374bed');
     label(controls, 29, VIEW.height - 26, '600 12px system-ui', '#fff1d7');
   }
-  if (mission) drawMissionHud(ctx, mission);
+  if (mission) drawMissionHud(ctx, mission, cityPanel.y + cityPanel.height + 16);
 }

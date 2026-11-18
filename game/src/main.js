@@ -206,7 +206,6 @@ if (params.has('shot')) {
       missions = createMissions({ completed: [1, 2], cash: 350 });
       startMission(missions, world, vehicles, wanted, car);
       missions.story = null;
-      reportCrime(wanted, 'theft', car);
       reportCrime(wanted, 'pedestrian', car);
     },
     pursue,

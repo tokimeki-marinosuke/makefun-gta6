@@ -70,29 +70,33 @@ export function drawMissionMapMarker(ctx, x, y) {
   ctx.restore();
 }
 
-export function drawMissionHud(ctx, { title, objective, story, ending }) {
+export function drawMissionHud(ctx, { title, objective, story, ending }, panelY) {
   ctx.save();
+  ctx.textAlign = 'left';
   if (title) {
+    const objectiveFont = '600 21px system-ui, sans-serif';
+    ctx.font = objectiveFont;
+    const width = Math.max(240, Math.ceil(ctx.measureText(objective).width) + 28);
     ctx.fillStyle = '#27374bed';
-    ctx.fillRect(18, 88, 420, 55);
-    text(ctx, title, 31, 110, titleFont, gold);
-    text(ctx, objective, 31, 132, bodyFont);
+    ctx.fillRect(18, panelY, width, 61);
+    text(ctx, title, 32, panelY + 23, titleFont, gold);
+    text(ctx, objective, 32, panelY + 49, objectiveFont);
   }
   if (story) {
     const x = 18;
     const width = VIEW.width - 36;
     ctx.font = bodyFont;
     const lines = wrap(ctx, story.text, width - 32);
-    const height = 54 + 23 * lines.length;
-    const y = VIEW.height - 52 - height;
-    ctx.fillStyle = '#202d43f5';
+    const height = 32 + 20 * lines.length;
+    const y = VIEW.height - 50 - height;
+    ctx.fillStyle = '#202d43e8';
     ctx.fillRect(x, y, width, height);
     ctx.fillStyle = gold;
     ctx.fillRect(x, y, 3, height);
-    text(ctx, story.heading, x + 16, y + 25, titleFont, gold);
-    for (const [i, line] of lines.entries()) text(ctx, line, x + 16, y + 50 + 23 * i, bodyFont);
+    text(ctx, story.heading, x + 16, y + 22, titleFont, gold);
+    for (const [i, line] of lines.entries()) text(ctx, line, x + 16, y + 43 + 20 * i, bodyFont);
     ctx.textAlign = 'right';
-    text(ctx, 'SPACE で送る', x + width - 16, y + height - 10, '12px system-ui, sans-serif');
+    text(ctx, 'SPACE で送る', x + width - 16, y + 22, '600 13px system-ui, sans-serif');
   }
   if (ending) {
     ctx.fillStyle = '#101b39f2';

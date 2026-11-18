@@ -1,12 +1,14 @@
 import { CITY_GRID, PALETTE, VIEW } from './config.js';
 import { districtAt, districts } from './districts.js';
-import { drawCharacter } from './character.js';
+import { drawCharacter, PROTAGONIST_SCALE } from './character.js';
 import { drawMissionMarker } from './mission-render.js';
 import { CAR } from './vehicles.js';
 import { drawHud } from './hud.js';
 import { drawTitleBackdrop } from './title.js';
 
 const { columns, rows, tile, road } = CITY_GRID;
+const protagonistStyle = { scale: PROTAGONIST_SCALE, outfit: '#ad287f' };
+
 export function cameraPosition(world, target) {
   return {
     x: Math.max(0, Math.min(target.x - VIEW.width / 2, world.width - VIEW.width)),
@@ -285,6 +287,21 @@ export function createRenderer(canvas) {
     }
   }
 
+  function drawPlayerRing(x, y, rx, ry, opacity) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2);
+    ctx.globalAlpha = opacity;
+    ctx.strokeStyle = '#ffc47a';
+    ctx.lineWidth = 7;
+    ctx.stroke();
+    ctx.globalAlpha = opacity * 2;
+    ctx.strokeStyle = '#fff0b8';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.restore();
+  }
+
   function drawCar({ x, y, heading, color, police, flash }, active) {
     const halfLength = CAR.length / 2;
     const halfWidth = CAR.width / 2;
@@ -292,6 +309,7 @@ export function createRenderer(canvas) {
     ctx.save();
     ctx.translate(x, y);
     ctx.rotate(heading);
+    if (active) drawPlayerRing(0, 0, halfLength + 6, halfWidth + 6, 0.25);
     for (const axle of [-13, 13]) {
       rect(axle - 3, -halfWidth - 1, 6, CAR.width + 2, '#27374b');
     }
@@ -356,7 +374,13 @@ export function createRenderer(canvas) {
     for (const person of pedestrians) {
       if (inView(person, 48)) layers.push({ depth: person.y, draw: () => drawCharacter(ctx, person) });
     }
-    if (!active) layers.push({ depth: player.y, draw: () => drawCharacter(ctx, player) });
+    if (!active) {
+      layers.push({ depth: player.y, draw: () => {
+        const pulse = Math.sin(player.stride * Math.PI);
+        drawPlayerRing(player.x, player.y, 18 + pulse, 9 + 0.5 * pulse, 0.34 + 0.08 * pulse);
+        drawCharacter(ctx, player, protagonistStyle);
+      } });
+    }
     layers.sort((a, b) => a.depth - b.depth);
     for (const layer of layers) layer.draw();
     ctx.restore();
@@ -366,6 +390,10 @@ export function createRenderer(canvas) {
       return;
     }
     if (mission?.marker) drawMissionMarker(ctx, mission.marker, { x: cameraX, y: cameraY }, target);
+    const markerX = target.x - cameraX;
+    const markerY = target.y - cameraY - (active ? CAR.length / 2 + 14 : 45 * PROTAGONIST_SCALE + 13);
+    star(markerX, markerY, 11, '#47314c');
+    star(markerX, markerY, 8, '#ffe08b');
     drawHud(ctx, world, target, { driving: Boolean(active), canEnter, wanted, mission, health, cash });
     if (wanted.busted) {
       rect(0, 0, VIEW.width, VIEW.height, '#1c2236dc');

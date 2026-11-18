@@ -24,11 +24,13 @@ export function stageShot(name, world, vehicles, updatePopulation, chase) {
   if (name === 'police-chase') {
     const { tile } = CITY_GRID;
     const car = vehicles.cars[0];
-    Object.assign(car, { x: tile * 4 + 70, y: tile * 2 - 13, heading: Math.PI });
+    Object.assign(car, { x: tile * 3 + 65, y: tile * 2, heading: 0 });
     vehicles.active = car;
     chase.startPursuit(car);
-    for (let tick = 0; tick < 105; tick += 1) {
-      if (tick >= 68) drive(world, vehicles, { x: 0, y: -1 });
+    // Let the patrols close in, then accelerate east and steer north.
+    // Freeze with the trailing unit and both cross-street units in frame.
+    for (let tick = 0; tick < 115; tick += 1) {
+      if (tick >= 68) drive(world, vehicles, { x: tick >= 96 ? -1 : 0, y: -1 });
       chase.pursue(world.spawn);
     }
     return world.spawn;
