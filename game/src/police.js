@@ -4,6 +4,14 @@ import { touchesCar } from './vehicles.js';
 import { hitsBuilding } from './world.js';
 
 const { columns, rows, tile } = CITY_GRID;
+const sightRange = 260;
+const pace = [
+  { topSpeed: 216, acceleration: 185 },
+  { topSpeed: 232, acceleration: 205 },
+  { topSpeed: 248, acceleration: 225 },
+  { topSpeed: 264, acceleration: 245 },
+  { topSpeed: 272, acceleration: 260 },
+];
 const streetX = Array.from({ length: columns + 1 }, (_, i) =>
   Math.max(14, Math.min(columns * tile - 14, i * tile)));
 const streetY = Array.from({ length: rows + 1 }, (_, i) => Math.max(14, i * tile));
@@ -59,7 +67,7 @@ function spawn(world, target, cars, obstacles) {
       cars.every((car) => gap(car, candidate) > 46 && gap(car.origin, candidate) >= tile * 0.7) &&
       obstacles.every((car) => gap(car, candidate) > 46);
   }).sort((a, b) => gap(a, target) - gap(b, target))[0];
-  if (point) cars.push({ ...point, origin: point, road: point, police: true, heading: 0, flash: false });
+  if (point) cars.push({ ...point, origin: point, road: point, police: true, heading: 0, speed: 0, flash: false });
 }
 
 function clearPath(world, a, b, radius) {
@@ -84,37 +92,41 @@ export function updatePolice(world, police, wanted, target, driving, obstacles) 
   const { cars } = police;
   const count = wanted.stars ? wanted.stars + 1 : 0;
   cars.length = Math.min(cars.length, count);
-  if (!count) return { visible: false, restrained: false };
+  if (!count) return { visible: false, nearby: false };
   if (cars.length < count && police.frame % 14 === 0) spawn(world, target, cars, obstacles);
   police.frame += 1;
-  const speed = 125 + wanted.stars * 31;
-  const observers = cars.filter((car) => gap(car, target) < 225 && clearPath(world, car, target, 0));
-  const visible = observers.length > 0;
-  const objective = visible ? target : wanted.lastSeen;
+  const { topSpeed, acceleration } = pace[wanted.stars - 1];
+  const canSee = (car) => gap(car, target) <= sightRange && clearPath(world, car, target, 0);
+  const observers = cars.filter(canSee);
+  const objective = observers.length ? target : wanted.lastSeen;
   const road = roadPoint(objective);
   for (const [index, car] of cars.entries()) {
     car.flash = Math.floor(police.frame / 7) % 2 === 0;
+    const distance = gap(car, target);
+    const trailing = driving && target.speed * (
+      (target.x - car.x) * Math.cos(target.heading) + (target.y - car.y) * Math.sin(target.heading)
+    ) > 0;
+    const catchUp = trailing ? 12 * Math.max(0, Math.min(1, (distance - 120) / 200)) : 0;
+    car.speed = Math.min(topSpeed + catchUp, car.speed + acceleration * STEP);
     const angle = (target.heading ?? 0) + index * Math.PI * 2 / count;
     const offset = driving ? 40 : 13;
     const intercept = { x: target.x + Math.cos(angle) * offset, y: target.y + Math.sin(angle) * offset };
-    const close = observers.includes(car) && gap(car, target) < 92 && gap(road, target) < 62 &&
+    const close = observers.includes(car) && distance < 92 && gap(road, target) < 62 &&
       intercept.x >= 12 && intercept.x <= world.width - 12 &&
       intercept.y >= 12 && intercept.y <= world.waterline - 12 && clearPath(world, car, intercept, 11);
     if (close) {
-      advance(car, intercept, speed);
+      advance(car, intercept, car.speed);
     } else if (gap(car, car.road) > 0) {
-      advance(car, car.road, speed);
+      advance(car, car.road, car.speed);
     } else {
-      advance(car, roadWaypoint(car.road, road), speed);
+      advance(car, roadWaypoint(car.road, road), car.speed);
       car.road = { x: car.x, y: car.y };
     }
   }
-  const nearby = cars.filter((car) => gap(car, target) <= 50);
-  const surrounded = nearby.some((a) => nearby.some((b) =>
-    (a.x - target.x) * (b.x - target.x) + (a.y - target.y) * (b.y - target.y) < 0));
-  const restrained = driving ? Math.abs(target.speed) < 12 && surrounded
-    : nearby.some((car) => touchesCar(car, target, 9));
-  return { visible, restrained };
+  const visible = observers.length > 0 || cars.some(canSee);
+  const nearby = cars.some((car) => gap(car, target) <= 50 &&
+    (driving || touchesCar(car, target, 9)) && clearPath(world, car, target, 0));
+  return { visible, nearby };
 }
 
 export function createPolice() {

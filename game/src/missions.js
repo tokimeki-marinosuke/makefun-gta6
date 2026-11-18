@@ -1,3 +1,4 @@
+import { playSound } from './sound.js';
 import { reportCrime } from './wanted.js';
 
 const missions = [
@@ -47,6 +48,7 @@ export function startMission(state, world, vehicles, wanted, target) {
   const mission = missions[state.index];
   if (!mission || state.progress[state.index] === '完了') return;
   state.progress[state.index] = '進行中';
+  playSound('missionStart');
   state.story = { heading: mission.title, text: mission.start, frames: introFrames };
   if (state.index === 1) {
     const { x, y } = world.locations.plaza;
@@ -82,6 +84,7 @@ export function checkMission(state, world, vehicles, wanted, player) {
   const mission = missions[state.index];
   state.progress[state.index] = '完了';
   state.cash += mission.reward;
+  playSound('missionComplete');
   state.car = null;
   state.story = { heading: mission.title + '　完了', text: mission.complete, frames: completionFrames };
   return { completed: state.progress.flatMap((status, index) => status === '完了' ? [index + 1] : []), cash: state.cash };

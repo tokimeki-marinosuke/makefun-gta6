@@ -29,8 +29,8 @@ export function stageShot(name, world, vehicles, updatePopulation, chase) {
     chase.startPursuit(car);
     // Let the patrols close in, then accelerate east and steer north.
     // Freeze with the trailing unit and both cross-street units in frame.
-    for (let tick = 0; tick < 115; tick += 1) {
-      if (tick >= 68) drive(world, vehicles, { x: tick >= 96 ? -1 : 0, y: -1 });
+    for (let tick = 0; tick < 151; tick += 1) {
+      if (tick >= 95) drive(world, vehicles, { x: tick >= 133 ? -1 : 0, y: -1 });
       chase.pursue(world.spawn);
     }
     return world.spawn;

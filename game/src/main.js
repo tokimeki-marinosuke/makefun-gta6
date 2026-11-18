@@ -8,6 +8,7 @@ import { createRandom } from './random.js';
 import { cameraPosition, createRenderer } from './render.js';
 import { loadSave, writeSave } from './save.js';
 import { showTitle } from './title.js';
+import { listenForSound, playSound, updateSound } from './sound.js';
 import { stageShot } from './shots.js';
 import { createTraffic, updateTraffic } from './traffic.js';
 import { createVehicles, drive, nearbyCar, toggleVehicle, touchesCar } from './vehicles.js';
@@ -114,11 +115,12 @@ function updateContacts(impact, moved) {
   contacts = overlapping;
 }
 
-function pursue(pose) {
+function pursue(pose, walkingSpeed = 0) {
   const target = vehicles.active ?? pose;
-  const { visible, restrained } = updatePolice(world, police, wanted, target, Boolean(vehicles.active),
+  const { visible, nearby } = updatePolice(world, police, wanted, target, Boolean(vehicles.active),
     [...vehicles.cars, ...population.traffic]);
-  updateWanted(wanted, target, visible, restrained);
+  const speed = vehicles.active ? Math.abs(target.speed) : walkingSpeed;
+  updateWanted(wanted, target, visible, nearby, speed);
 }
 
 function draw(pose, canEnter, titleCamera) {
@@ -160,7 +162,7 @@ function tick(input, direction) {
     return;
   }
   updatePopulation(player);
-  pursue(player);
+  pursue(player, Math.hypot(target.x - x, target.y - y) / STEP);
   const checkpoint = checkMission(missions, world, vehicles, wanted, player);
   if (checkpoint) writeSave(checkpoint);
 }
@@ -178,6 +180,7 @@ function runGame() {
       tick(input, direction);
       accumulated -= STEP;
     }
+    updateSound(vehicles.active, wanted, police.cars, player);
     const canEnter = !vehicles.active && Boolean(nearbyCar(vehicles, player));
     const message = wanted.busted ? 'BUSTED. Returning to the start.' : (vehicles.active
       ? 'Driving. Use WASD or the arrow keys. Press E to exit.'
@@ -218,6 +221,7 @@ if (params.has('shot')) {
     });
   });
 } else {
+  listenForSound();
   const save = loadSave(MISSION_COUNT);
   const menu = document.getElementById('title-menu');
   let startTime;
@@ -230,6 +234,7 @@ if (params.has('shot')) {
     requestAnimationFrame(titleFrame);
   }
   showTitle(menu, Boolean(save), (resume) => {
+    playSound('confirm');
     missions = createMissions(resume ? save : undefined);
     if (!resume) writeSave({ completed: [], cash: 0 });
     reset();

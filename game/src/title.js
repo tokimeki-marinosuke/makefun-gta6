@@ -28,6 +28,7 @@ export function showTitle(menu, hasSave, start) {
   }
 
   function onKey(event) {
+    if (event.key.toLowerCase() === 'm') return;
     if (event.repeat || event.ctrlKey || event.metaKey || event.altKey ||
         ['Tab', 'Escape', 'Shift', 'Control', 'Alt', 'Meta'].includes(event.key) ||
         /^F\d+$/.test(event.key)) return;

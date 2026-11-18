@@ -1,4 +1,5 @@
 import { PLAYER, STEP } from './config.js';
+import { playCollision, playSound } from './sound.js';
 import { canWalk, hitsBuilding } from './world.js';
 
 export const CAR = { length: 42, width: 18 };
@@ -40,6 +41,7 @@ export function toggleVehicle(world, vehicles, player, traffic = []) {
   const car = vehicles.active;
   if (!car) {
     vehicles.active = nearbyCar(vehicles, player);
+    if (vehicles.active) playSound('enter');
     return vehicles.active;
   }
 
@@ -55,6 +57,7 @@ export function toggleVehicle(world, vehicles, player, traffic = []) {
     Object.assign(player, { x, y, stride: 0 });
     car.speed = 0;
     vehicles.active = null;
+    playSound('exit');
     return;
   }
 }
@@ -85,6 +88,7 @@ export function drive(world, { active: car, cars }, { x: steer, y }, traffic = [
     x < bodyRadius || x > world.width - bodyRadius || y < bodyRadius ||
     y > world.waterline - bodyRadius || hitsBuilding(world, x, y, bodyRadius));
   if (blocked || impact) {
+    if (Math.abs(speed) > 5) playCollision(speed);
     car.speed = 0;
     return impact;
   }

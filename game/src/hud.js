@@ -69,7 +69,8 @@ export function drawHud(ctx, world, player, { driving, canEnter, wanted, mission
     const center = VIEW.width / 2;
     rect(center - 80, 17, 160, 36, '#27374bed');
     for (let i = 0; i < 5; i += 1) {
-      star(center + (i - 2) * 28, 35, 11, i < wanted.stars ? '#ffd388' : '#6c7483');
+      const blinking = i === wanted.stars - 1 && Math.floor(wanted.unseen / 15) % 2 === 1;
+      star(center + (i - 2) * 28, 35, 11, i < wanted.stars && !blinking ? '#ffd388' : '#6c7483');
     }
     // Frozen shots omit controls but still show the arrest meter at zero.
     if (wanted.arrest || canEnter === undefined) {
