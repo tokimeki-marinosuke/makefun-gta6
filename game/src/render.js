@@ -1,4 +1,5 @@
 import { CITY_GRID, PALETTE, VIEW } from './config.js';
+import { districtAt, districts } from './districts.js';
 import { drawCharacter } from './character.js';
 import { drawMissionMarker } from './mission-render.js';
 import { CAR } from './vehicles.js';
@@ -6,9 +7,6 @@ import { drawHud } from './hud.js';
 import { drawTitleBackdrop } from './title.js';
 
 const { columns, rows, tile, road } = CITY_GRID;
-const roofs = ['#e8a68b', '#f1d3a1', '#c1d7c6', '#c9b5cd', '#d9b394'];
-const walls = ['#a65f59', '#b88a62', '#729b91', '#8b779b', '#ab795f'];
-
 export function cameraPosition(world, target) {
   return {
     x: Math.max(0, Math.min(target.x - VIEW.width / 2, world.width - VIEW.width)),
@@ -76,6 +74,33 @@ export function createRenderer(canvas) {
     ellipse(x - 4, y - 8, 7, 6, variety > 0.5 ? '#84aa83' : '#96ad70');
   }
 
+  function palm(x, y) {
+    ellipse(x + 7, y + 5, 14, 6, '#58665560');
+    line([[x, y + 6], [x + 1, y - 5], [x - 3, y - 15]], '#8d6753', 4);
+    for (const [dx, dy] of [[-16, 2], [-13, -9], [-3, -15], [12, -10], [16, 2], [5, 10]]) {
+      line([[x - 3, y - 15], [x + dx * 0.6, y - 19 + dy * 0.5],
+        [x + dx, y - 15 + dy]], dy < 0 ? '#649c71' : '#3e826b', 3);
+    }
+  }
+
+  function sundial(x, y, color) {
+    ellipse(x + 6, y + 6, 42, 32, '#986d5960');
+    ellipse(x, y, 42, 32, '#fff1ce');
+    ellipse(x, y, 37, 27, color);
+    for (let i = 0; i < 12; i += 1) {
+      const angle = i * Math.PI / 6;
+      ellipse(x + 32 * Math.cos(angle), y + 23 * Math.sin(angle), 1.6, 1.6, '#fff1ce');
+    }
+    star(x, y, 23, '#f9d687');
+    ctx.fillStyle = '#31465c';
+    ctx.beginPath();
+    ctx.moveTo(x - 4, y + 5);
+    ctx.lineTo(x + 5, y - 19);
+    ctx.lineTo(x + 12, y + 5);
+    ctx.fill();
+    label('N', x, y - 23, 'bold 8px system-ui', '#fff1ce', 'center');
+  }
+
   function coast(world) {
     const { width, cityEnd, waterline, height } = world;
     rect(0, cityEnd, width, height - cityEnd, PALETTE.sand);
@@ -85,11 +110,13 @@ export function createRenderer(canvas) {
     tide.addColorStop(0.34, '#48acb0');
     tide.addColorStop(1, PALETTE.sea);
     rect(0, waterline, width, height - waterline, tide);
-    rect(0, cityEnd + 4, width, 21, '#ecd7b7');
-    rect(0, cityEnd + 24, width, 2, '#fff0cb');
+    const { promenade, trim, sundial: dialColor } = districts.resort.props;
+    rect(0, cityEnd, width, 29, promenade);
+    rect(0, cityEnd + 2, width, 2, trim);
+    rect(0, cityEnd + 25, width, 3, trim);
     for (let x = 21; x < width; x += 48) {
       rect(x, cityEnd + 8, 1, 13, '#cbb28f');
-      tree(x, cityEnd + 41 + (x % 3) * 6, x % 5 / 5);
+      palm(x, cityEnd + 42 + (x % 3) * 6);
       ellipse(x + 24, waterline - 36 - x % 13, 2, 0.75, '#c69578');
     }
     for (let band = 0; band < 8; band += 1) {
@@ -112,41 +139,70 @@ export function createRenderer(canvas) {
       ellipse(x, waterline + y, 12, 10, color);
       star(x, waterline + y, 9, '#fff0c6');
     }
+    sundial(world.locations.coast.x, world.locations.coast.y, dialColor);
   }
 
   function roads(world) {
-    rect(0, 0, world.width, world.cityEnd, PALETTE.road);
+    const half = road / 2;
+    // Each half of a shared street takes its surface from the adjacent block.
+    for (const block of world.blocks) {
+      const { x, y, district } = block;
+      const { surface } = districts[district].road;
+      const right = block.column === columns - 1 ? half : 0;
+      const bottom = block.row === rows - 1 ? half : 0;
+      rect(x - half, y - half, tile + right, tile + bottom, surface);
+    }
     for (let row = 0; row <= rows; row += 1) {
       for (let column = 0; column <= columns; column += 1) {
         const x = column * tile;
         const y = row * tile;
-        for (let offset = 43; offset <= tile - 43; offset += 24) {
-          if (column < columns) rect(x + offset, y - 1, 12, 2, '#f7d9a0');
-          if (row < rows) rect(x - 1, y + offset, 2, 12, '#f7d9a0');
+        const { marking, dash } = districts[districtAt(Math.min(column, columns - 1), Math.min(row, rows - 1))].road;
+        for (let offset = 43; offset <= tile - 43; offset += 29) {
+          if (column < columns) rect(x + offset, y - 1, dash, 2, marking);
+          if (row < rows) rect(x - 1, y + offset, 2, dash, marking);
         }
         for (let stripe = -19; stripe <= 19; stripe += 7) {
-          if (column < columns) rect(x + 27, y + stripe, 10, 3, '#f5e4c8');
-          if (column > 0) rect(x - 37, y + stripe, 10, 3, '#f5e4c8');
-          if (row < rows) rect(x + stripe, y + 27, 3, 10, '#f5e4c8');
-          if (row > 0) rect(x + stripe, y - 37, 3, 10, '#f5e4c8');
+          if (column < columns) rect(x + 27, y + stripe, 10, 3, marking);
+          if (column > 0) rect(x - 37, y + stripe, 10, 3, marking);
+          if (row < rows) rect(x + stripe, y + 27, 3, 10, marking);
+          if (row > 0) rect(x + stripe, y - 37, 3, 10, marking);
         }
       }
     }
   }
 
   function blockGround(block) {
-    const { x, y, size, kind, plant } = block;
-    rect(x, y, size, size, PALETTE.curb);
-    rect(x + 2, y + 2, size - 4, size - 4, PALETTE.sidewalk);
-    for (let offset = 12; offset < size; offset += 14) {
-      rect(x + offset, y + 2, 0.8, 7, '#ae8c774f');
-      rect(x + 2, y + offset, 7, 0.8, '#ae8c774f');
+    const { x, y, size, kind, plant, district } = block;
+    const { curb, ground, garden, road: street, props } = districts[district];
+    const shoulder = street.shoulder ?? 0;
+    rect(x, y, size, size, street.surface);
+    ctx.strokeStyle = street.edge;
+    ctx.lineWidth = district === 'downtown' ? 2 : 1;
+    const edgeInset = shoulder ? shoulder - 2 : -2;
+    ctx.strokeRect(x + edgeInset, y + edgeInset, size - 2 * edgeInset, size - 2 * edgeInset);
+    rect(x + shoulder, y + shoulder, size - 2 * shoulder, size - 2 * shoulder, curb);
+    rect(x + shoulder + 2, y + shoulder + 2, size - 2 * shoulder - 4, size - 2 * shoulder - 4, ground);
+
+    if (district === 'residential') {
+      for (const [lotX, lotY] of districts.residential.buildings.lots) {
+        rect(x + lotX - 6, y + lotY - 6, 53, 57, garden);
+        rect(x + lotX + 14, y + lotY + 32, 6, 19, curb);
+      }
     }
-    if (kind !== 'buildings') {
-      rect(x + 11, y + 11, size - 22, size - 22, PALETTE.garden);
-      rect(x + 48, y + 11, 27, size - 22, '#f1d9b1');
-      rect(x + 11, y + 140, size - 22, 24, '#f1d9b1');
+    if (district === 'academy') {
+      rect(x + 11, y + 11, size - 22, size - 22, garden);
+      const pathX = kind === 'observatory' ? 48 : 86;
+      rect(x + pathX, y + 11, 27, size - 22, curb);
+      rect(x + 11, y + 140, size - 22, 24, curb);
+      if (kind !== 'observatory') {
+        const [mx, my] = props.monument;
+        ellipse(x + mx, y + my, 18, 14, curb);
+        ellipse(x + mx, y + my, 14, 10, '#477d83');
+        star(x + mx, y + my - 1, 11, '#fff2bb');
+      }
     }
+    for (const [tx, ty] of props?.trees ?? []) tree(x + tx, y + ty, plant);
+    for (const [px, py] of props?.palms ?? []) palm(x + px, y + py);
     if (kind === 'observatory') {
       const points = [[x + 25, y + 78], [x + 41, y + 54], [x + 65, y + 64], [x + 80, y + 43]];
       line(points, '#fbefc5', 2);
@@ -155,17 +211,21 @@ export function createRenderer(canvas) {
       ellipse(x + 46, y + 112, 20, 13, '#6db7b0');
       star(x + 46, y + 112, 10, '#fff2bb');
       label('OBSERVATORY', x + 108, y + 179, '600 10px system-ui', PALETTE.ink, 'center');
-    } else if (kind === 'garden') {
-      star(x + 125, y + 100, 32, '#f4dfb0');
-      tree(x + 142, y + 48, plant);
     }
-    tree(x + 88, y + 24, plant);
-    tree(x + 24, y + 173, 1 - plant);
-    tree(x + 173, y + 174, plant);
+  }
+
+  function crane(x, y, color) {
+    line([[x - 11, y + 8], [x + 6, y + 8], [x, y - 59], [x - 11, y + 8]], color, 4);
+    line([[x - 34, y - 43], [x, y - 60], [x + 51, y - 43], [x - 34, y - 43]], color, 3);
+    line([[x + 43, y - 43], [x + 43, y - 13], [x + 38, y - 10]], color, 2);
+    for (let offset = -33; offset < 46; offset += 12) {
+      rect(x + offset, y - 44, 7, 3, '#f4c661');
+    }
   }
 
   function drawBuilding(building) {
-    const { x, y, width: w, depth: d, height: h, kind, style } = building;
+    const { x, y, width: w, depth: d, height: h, kind, style, district } = building;
+    const { buildings: plan, props } = districts[district];
     rect(x + 7, y + 6, w + h * 0.45, d + h * 0.28, '#5542583c');
     if (kind === 'observatory') {
       rect(x, y + 9, w, d - 9, '#85829e');
@@ -179,17 +239,50 @@ export function createRenderer(canvas) {
       return;
     }
 
-    rect(x, y, w, d, walls[style]);
-    for (let offset = 7; offset < w - 6; offset += 12) {
-      rect(x + offset, y + d - h * 0.32, 6, 4, '#463f51');
+    if (kind === 'container') {
+      rect(x, y, w, d, '#424957');
+      rect(x, y, w, d - 3, props.containerColors[style]);
+      for (let offset = 3; offset < w; offset += 4) rect(x + offset, y + 1, 1, d - 5, '#24324440');
+      return;
     }
-    const roofDepth = d - h * 0.55;
-    rect(x, y - h * 0.25, w, roofDepth, roofs[style]);
-    rect(x + 2, y - h * 0.25 + 2, w - 4, 2, '#fff6dc99');
-    rect(x + 4, y - h * 0.25 + 5, 2, roofDepth - 8, '#fff6dc76');
-    rect(x + w - 21, y + 9, 12, 9, '#53516b55');
-    rect(x + w - 23, y + 7, 12, 8, '#eee0cb');
-    if (style === 3) star(x + w / 2, y + roofDepth / 2, 9, '#fff1c8');
+
+    const rise = Math.round(h / 3);
+    const roofY = y - rise;
+    const roofDepth = d - rise;
+    rect(x, y, w, d, plan.walls[style]);
+    rect(x, roofY, w, roofDepth, plan.roofs[style]);
+    rect(x + 2, roofY + 2, w - 4, 2, '#fff6dc80');
+
+    if (plan.style === 'warehouse') {
+      for (let offset = 12; offset < w - 6; offset += 15) {
+        rect(x + offset, roofY + 7, 2, roofDepth - 12, plan.accent);
+      }
+      for (let offset = 8; offset < w - 14; offset += 24) {
+        rect(x + offset, y + d - 10, 15, 10, '#283b49');
+        rect(x + offset, y + d - 2, 15, 2, '#ffda64');
+      }
+    } else if (plan.style === 'house' || plan.style === 'villa') {
+      const ridge = roofY + roofDepth / 2;
+      rect(x + 2, ridge, w - 4, roofDepth / 2, '#46304d24');
+      line([[x + 3, ridge], [x + w - 3, ridge]], plan.accent, 2);
+      rect(x + w / 2 - 4, y + d - 7, 8, 7, '#594f5c');
+      if (plan.style === 'villa') {
+        rect(x + 3, y + d - 13, w - 6, 4, plan.accent);
+        for (let offset = 7; offset < w - 4; offset += 9) rect(x + offset, y + d - 13, 3, 4, plan.roofs[style]);
+      }
+    } else {
+      rect(x + 7, roofY + 8, w - 14, roofDepth - 16, '#293b5128');
+      for (let offset = 8; offset < w - 5; offset += 11) {
+        rect(x + offset, y + d - rise, 5, 3, plan.accent);
+      }
+      if (plan.style === 'tower') {
+        const signY = y + d - 15;
+        rect(x + 6, signY - 2, w - 12, 16, '#e580e55c');
+        rect(x + 9, signY, w - 18, 12, '#242137');
+        star(x + 18, signY + 6, 5, '#ffa5fb');
+        label('ASTER', x + 26, signY + 9, 'bold 8px system-ui', plan.accent);
+      }
+    }
   }
 
   function drawCar({ x, y, heading, color, police, flash }, active) {
@@ -247,6 +340,11 @@ export function createRenderer(canvas) {
       depth: building.y + building.depth,
       draw: () => drawBuilding(building),
     }));
+    const harborCrane = districts.harbor.props.crane;
+    const craneBlock = world.blocks[harborCrane.row * columns + harborCrane.column];
+    const craneX = craneBlock.x + harborCrane.x;
+    const craneY = craneBlock.y + harborCrane.y;
+    layers.push({ depth: craneBlock.y + 120, draw: () => crane(craneX, craneY, harborCrane.color) });
     const inView = ({ x, y }, margin) => x >= cameraX - margin &&
       x <= cameraX + VIEW.width + margin && y >= cameraY - margin &&
       y <= cameraY + VIEW.height + margin;

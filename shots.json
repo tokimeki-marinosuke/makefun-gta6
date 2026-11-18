@@ -2,5 +2,5 @@
   { "name": "1-police-chase.jpg", "query": "?shot=police-chase&seed=1" },
   { "name": "2-observatory.jpg", "query": "?shot=observatory&seed=1" },
   { "name": "3-coast.jpg", "query": "?shot=coast&seed=1" },
-  { "name": "4-downtown.jpg", "query": "?shot=downtown&seed=1" }
+  { "name": "4-harbor.jpg", "query": "?shot=harbor&seed=1" }
 ]

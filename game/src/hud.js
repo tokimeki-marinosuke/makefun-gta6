@@ -1,4 +1,5 @@
 import { CITY, PALETTE, VIEW } from './config.js';
+import { districtAtPosition, districts } from './districts.js';
 import { drawMissionHud, drawMissionMapMarker } from './mission-render.js';
 import { ARREST_FRAMES } from './wanted.js';
 
@@ -34,9 +35,7 @@ export function drawHud(ctx, world, player, { driving, canEnter, wanted, mission
   }
 
   const marker = mission?.marker;
-  const area = player.y >= world.cityEnd ? 'Sundial Beach'
-    : Math.hypot(player.x - world.locations.plaza.x, player.y - world.locations.plaza.y) < 145
-      ? 'Meridian Observatory' : 'Meridian District';
+  const area = districtAtPosition(player).name;
   rect(18, 17, 210, 62, '#27374bed');
   rect(18, 17, 3, 62, '#ffd388');
   star(39, 41, 8, '#ffd388');
@@ -52,8 +51,9 @@ export function drawHud(ctx, world, player, { driving, canEnter, wanted, mission
   rect(map.x, my(world.waterline), map.w, my(world.height) - my(world.waterline), PALETTE.sea);
   for (const block of world.blocks) {
     rect(mx(block.x), my(block.y), block.size / world.width * map.w,
-      block.size / world.height * map.h, block.kind === 'buildings' ? '#596878' : '#799581');
+      block.size / world.height * map.h, districts[block.district].mapColor);
   }
+  star(mx(world.locations.plaza.x + 75), my(world.locations.plaza.y), 6.5, PALETTE.ink);
   star(mx(world.locations.plaza.x + 75), my(world.locations.plaza.y), 5, '#ffe39c');
   if (marker) drawMissionMapMarker(ctx, mx(marker.x), my(marker.y));
   ellipse(mx(player.x), my(player.y), 4, 4, PALETTE.ink);

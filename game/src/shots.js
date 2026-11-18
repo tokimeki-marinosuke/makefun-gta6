@@ -4,15 +4,27 @@ import { drive } from './vehicles.js';
 // Each pose uses the same camera and renderer as free exploration.
 export function stageShot(name, world, vehicles, updatePopulation, chase) {
   if (name === 'downtown' || name === 'start' || name === 'start-traffic') {
-    for (let tick = 0; tick < 90; tick += 1) updatePopulation(world.spawn);
-    return world.spawn;
+    const pose = name === 'downtown'
+      ? { ...world.spawn, x: 4 * CITY_GRID.tile, y: CITY_GRID.tile + 20 }
+      : world.spawn;
+    for (let tick = 0; tick < 90; tick += 1) updatePopulation(pose);
+    return pose;
   }
   if (name === 'observatory') return world.locations.plaza;
-  if (name === 'coast') return world.locations.coast;
+  if (name === 'coast') {
+    const { coast } = world.locations;
+    return { ...coast, x: coast.x + 60, y: coast.y - 30 };
+  }
+  if (name === 'harbor') {
+    const { tile } = CITY_GRID;
+    const pose = { ...world.spawn, x: tile * 5 + 65, y: tile * 2 - 10, stride: 0.26 };
+    for (let tick = 0; tick < 90; tick += 1) updatePopulation(pose);
+    return pose;
+  }
   if (name === 'police-chase') {
     const { tile } = CITY_GRID;
     const car = vehicles.cars[0];
-    Object.assign(car, { x: tile * 3 + 80, y: tile * 3 - 13, heading: 0 });
+    Object.assign(car, { x: tile * 4 + 70, y: tile * 2 - 13, heading: Math.PI });
     vehicles.active = car;
     chase.startPursuit(car);
     for (let tick = 0; tick < 105; tick += 1) {
