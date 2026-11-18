@@ -22,18 +22,25 @@ export function drawCharacter(ctx, player) {
   ctx.translate(player.x, player.y);
   ellipse(2, 1, 15, 7, '#44334b50');
   ctx.scale(player.facing, 1);
-  const hair = '#573458';
-  const navy = '#353958';
-  const skin = '#ffdbba';
+  const appearance = player.appearance;
+  const hair = appearance?.hair ?? '#573458';
+  const navy = appearance?.outfit ?? '#353958';
+  const skin = appearance?.skin ?? '#ffdbba';
   for (const side of [-1, 1]) {
     const footY = side * bob * 2;
     ellipse(side * 5, -4 + footY, 3.4, 6.5, '#fff3de');
     ellipse(side * 5 + 1, footY, 4.5, 2.8, navy);
   }
-  ellipse(-12, -23, 6.5, 14, hair);
-  ellipse(12, -23, 6.5, 14, hair);
-  ellipse(-13, -26, 3, 7, '#9a587b');
-  ellipse(13, -26, 3, 7, '#9a587b');
+  if (!appearance || appearance.style === 'bob') {
+    const length = appearance ? 8 : 14;
+    ellipse(-12, -23, 6.5, length, hair);
+    ellipse(12, -23, 6.5, length, hair);
+    if (!appearance) {
+      ellipse(-13, -26, 3, 7, '#9a587b');
+      ellipse(13, -26, 3, 7, '#9a587b');
+    }
+  }
+  if (appearance?.style === 'bun') ellipse(-8, -43, 6, 6, hair);
   ellipse(-9, -15, 3.3, 5, skin);
   ellipse(9, -15, 3.3, 5, skin);
   shape([[-7, -20], [7, -20], [11, -8], [4, -6], [-10, -8]], navy);
@@ -48,6 +55,6 @@ export function drawCharacter(ctx, player) {
     ellipse(x + 0.3, -29, 0.55, 0.65, '#fff9e6');
     ellipse(x, -25, 1.8, 0.75, '#f89596');
   }
-  shape([[-10, -41], [-8, -37], [-4, -36], [-8, -35], [-10, -31], [-11, -35], [-15, -36], [-11, -37]], '#ffe08b');
+  if (!appearance) shape([[-10, -41], [-8, -37], [-4, -36], [-8, -35], [-10, -31], [-11, -35], [-15, -36], [-11, -37]], '#ffe08b');
   ctx.restore();
 }

@@ -1,9 +1,17 @@
 import { CITY, CITY_GRID, PALETTE, VIEW } from './config.js';
 import { drawCharacter } from './character.js';
+import { CAR } from './vehicles.js';
 
 const { columns, rows, tile, road } = CITY_GRID;
 const roofs = ['#e8a68b', '#f1d3a1', '#c1d7c6', '#c9b5cd', '#d9b394'];
 const walls = ['#a65f59', '#b88a62', '#729b91', '#8b779b', '#ab795f'];
+
+export function cameraPosition(world, target) {
+  return {
+    x: Math.max(0, Math.min(target.x - VIEW.width / 2, world.width - VIEW.width)),
+    y: Math.max(0, Math.min(target.y - VIEW.height / 2, world.height - VIEW.height)),
+  };
+}
 
 export function createRenderer(canvas) {
   const ctx = canvas.getContext('2d');
@@ -181,7 +189,32 @@ export function createRenderer(canvas) {
     if (style === 3) star(x + w / 2, y + roofDepth / 2, 9, '#fff1c8');
   }
 
-  function hud(world, player) {
+  function drawCar({ x, y, heading, color }, active) {
+    const halfLength = CAR.length / 2;
+    const halfWidth = CAR.width / 2;
+    ellipse(x + 3, y + 4, 18, 10, '#423b4e60');
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(heading);
+    for (const axle of [-13, 13]) {
+      rect(axle - 3, -halfWidth - 1, 6, CAR.width + 2, '#27374b');
+    }
+    ctx.beginPath();
+    ctx.roundRect(-halfLength, -halfWidth, CAR.length, CAR.width, 4);
+    ctx.fillStyle = color;
+    ctx.fill();
+    rect(-11, -7, 20, 14, '#35495d');
+    rect(-6, -6, 11, 12, color);
+    rect(-5, -5, 9, 2, '#fff1d799');
+    rect(8, -7, 2, 14, '#7fabb4');
+    for (const side of [-6, 4]) {
+      rect(17, side, 3, 2, active ? '#fffad3' : '#eadabf');
+      rect(-20, side, 2, 2, '#8e3b4d');
+    }
+    ctx.restore();
+  }
+
+  function hud(world, player, driving, canEnter) {
     const area = player.y >= world.cityEnd ? 'Sundial Beach'
       : Math.hypot(player.x - world.locations.plaza.x, player.y - world.locations.plaza.y) < 145
         ? 'Meridian Observatory' : 'Meridian District';
@@ -206,11 +239,15 @@ export function createRenderer(canvas) {
     ellipse(mx(player.x), my(player.y), 4, 4, PALETTE.ink);
     ellipse(mx(player.x), my(player.y), 2.4, 2.4, '#fff4d8');
 
-    rect(18, VIEW.height - 42, 187, 24, '#27374bed');
-    label('WASD / ARROW KEYS', 29, VIEW.height - 26, '600 12px system-ui', '#fff1d7');
+    const controls = driving ? 'WASD / ARROW KEYS  ·  E EXIT'
+      : canEnter ? 'WASD / ARROW KEYS  ·  E ENTER' : 'WASD / ARROW KEYS';
+    ctx.font = '600 12px system-ui';
+    rect(18, VIEW.height - 42, ctx.measureText(controls).width + 22, 24, '#27374bed');
+    label(controls, 29, VIEW.height - 26, '600 12px system-ui', '#fff1d7');
   }
 
-  function draw(world, player) {
+  function draw(world, player, { cars, active }, { traffic, pedestrians }, canEnter = false) {
+    const target = active ?? player;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     rect(0, 0, canvas.width, canvas.height, PALETTE.backdrop);
     ctx.setTransform(scale, 0, 0, scale, insetX, insetY);
@@ -218,8 +255,7 @@ export function createRenderer(canvas) {
     ctx.beginPath();
     ctx.rect(0, 0, VIEW.width, VIEW.height);
     ctx.clip();
-    const cameraX = Math.max(0, Math.min(player.x - VIEW.width / 2, world.width - VIEW.width));
-    const cameraY = Math.max(0, Math.min(player.y - VIEW.height / 2, world.height - VIEW.height));
+    const { x: cameraX, y: cameraY } = cameraPosition(world, target);
     ctx.save();
     ctx.translate(-cameraX, -cameraY);
     roads(world);
@@ -228,17 +264,26 @@ export function createRenderer(canvas) {
     const visible = world.buildings.filter(({ x, y, width, depth, height }) =>
       x + width + height >= cameraX && x <= cameraX + VIEW.width &&
       y + depth + height >= cameraY && y - height <= cameraY + VIEW.height);
-    visible.sort((a, b) => a.y + a.depth - b.y - b.depth);
-    for (const building of visible) {
-      if (building.y + building.depth > player.y) break;
-      drawBuilding(building);
+    const layers = visible.map((building) => ({
+      depth: building.y + building.depth,
+      draw: () => drawBuilding(building),
+    }));
+    const inView = ({ x, y }, margin) => x >= cameraX - margin &&
+      x <= cameraX + VIEW.width + margin && y >= cameraY - margin &&
+      y <= cameraY + VIEW.height + margin;
+    for (const car of [...cars, ...traffic]) {
+      if (inView(car, CAR.length)) {
+        layers.push({ depth: car.y, draw: () => drawCar(car, car === active) });
+      }
     }
-    drawCharacter(ctx, player);
-    for (const building of visible) {
-      if (building.y + building.depth > player.y) drawBuilding(building);
+    for (const person of pedestrians) {
+      if (inView(person, 48)) layers.push({ depth: person.y, draw: () => drawCharacter(ctx, person) });
     }
+    if (!active) layers.push({ depth: player.y, draw: () => drawCharacter(ctx, player) });
+    layers.sort((a, b) => a.depth - b.depth);
+    for (const layer of layers) layer.draw();
     ctx.restore();
-    hud(world, player);
+    hud(world, target, Boolean(active), canEnter);
     ctx.restore();
   }
 

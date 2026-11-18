@@ -1,5 +1,6 @@
 [
-  { "name": "1-start.jpg", "query": "?shot=start&seed=1" },
+  { "name": "1-start.jpg", "query": "?shot=start-traffic&seed=1" },
   { "name": "2-observatory.jpg", "query": "?shot=observatory&seed=1" },
-  { "name": "3-coast.jpg", "query": "?shot=coast&seed=1" }
+  { "name": "3-coast.jpg", "query": "?shot=coast&seed=1" },
+  { "name": "4-coast-drive.jpg", "query": "?shot=coast-drive&seed=1" }
 ]

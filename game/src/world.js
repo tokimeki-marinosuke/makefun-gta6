@@ -2,6 +2,24 @@ import { CITY_GRID, PLAYER } from './config.js';
 
 const { columns, rows, tile, road, beach, sea } = CITY_GRID;
 const halfRoad = road / 2;
+const carColors = ['#d96263', '#6c9eb9', '#f3c16d', '#6da995', '#a887b0', '#eee2cb'];
+
+function placeParkedCars(random, spawn) {
+  const cars = [];
+  const park = (x, y, heading) => {
+    cars.push({ x, y, heading, color: carColors[Math.floor(random() * carColors.length)] });
+  };
+  park(spawn.x + 46, spawn.y + 17, 0);
+  for (let row = 0; row <= rows; row += 1) {
+    for (let column = 0; column < columns; column += 1) {
+      if (random() < 0.42) continue;
+      const side = row === 0 ? 1 : row === rows ? -1 : random() < 0.5 ? -1 : 1;
+      const x = column * tile + 112 + Math.floor(random() * 50);
+      park(x, row * tile + side * 17, side === 1 ? 0 : Math.PI);
+    }
+  }
+  return cars;
+}
 
 export function isRoad(world, x, y) {
   if (x < 0 || x > world.width || y < 0 || y >= world.cityEnd) return false;
@@ -56,7 +74,8 @@ export function createWorld(random) {
       }
     }
   }
-  return { width, height: waterline + sea, cityEnd, waterline, blocks, buildings, spawn, locations };
+  const parkedCars = placeParkedCars(random, spawn);
+  return { width, height: waterline + sea, cityEnd, waterline, blocks, buildings, spawn, locations, parkedCars };
 }
 
 export function canWalk(world, x, y) {

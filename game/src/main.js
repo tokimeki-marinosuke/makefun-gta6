@@ -1,8 +1,11 @@
-import { CITY, DEFAULT_SEED, PLAYER, STEP } from './config.js';
+import { DEFAULT_SEED, PLAYER, STEP, VIEW } from './config.js';
 import { createInput } from './input.js';
+import { createPedestrians, updatePedestrians } from './pedestrians.js';
 import { createRandom } from './random.js';
-import { createRenderer } from './render.js';
+import { cameraPosition, createRenderer } from './render.js';
 import { stageShot } from './shots.js';
+import { createTraffic, updateTraffic } from './traffic.js';
+import { createVehicles, drive, nearbyCar, toggleVehicle } from './vehicles.js';
 import { canWalk, createWorld } from './world.js';
 
 const params = new URLSearchParams(window.location.search);
@@ -11,6 +14,12 @@ const seed = Number.isInteger(seedParam) ? seedParam : DEFAULT_SEED;
 const world = createWorld(createRandom(seed));
 const renderer = createRenderer(document.getElementById('game'));
 const player = { ...world.spawn };
+const vehicles = createVehicles(world);
+const population = {
+  traffic: createTraffic(vehicles, createRandom(seed ^ 0x41c64e6d)),
+  pedestrians: createPedestrians(world, createRandom(seed ^ 0x9e3779b9)),
+};
+const status = document.getElementById('status');
 
 function walk({ x, y }) {
   const length = Math.hypot(x, y);
@@ -26,6 +35,15 @@ function walk({ x, y }) {
   player.stride += Math.hypot(player.x - previousX, player.y - previousY) / 32;
 }
 
+function updatePopulation(pose) {
+  const { x, y } = cameraPosition(world, vehicles.active ?? pose);
+  const margin = 140;
+  const nearby = (entity) => entity.x >= x - margin && entity.x <= x + VIEW.width + margin &&
+    entity.y >= y - margin && entity.y <= y + VIEW.height + margin;
+  updateTraffic(population.traffic, vehicles, pose, nearby);
+  updatePedestrians(world, population.pedestrians, vehicles.active, nearby);
+}
+
 function runGame() {
   const input = createInput();
   let previousFrame;
@@ -36,23 +54,31 @@ function runGame() {
     previousFrame = now;
     const direction = input.direction();
     while (accumulated >= STEP) {
-      walk(direction);
+      if (input.takeInteract()) toggleVehicle(world, vehicles, player, population.traffic);
+      if (vehicles.active) drive(world, vehicles, direction, population.traffic);
+      else walk(direction);
+      updatePopulation(player);
       accumulated -= STEP;
     }
-    renderer.draw(world, player);
+    const canEnter = !vehicles.active && Boolean(nearbyCar(vehicles, player));
+    const message = vehicles.active
+      ? 'Driving. Use WASD or the arrow keys. Press E to exit.'
+      : canEnter ? 'Walk with WASD or the arrow keys. Press E to enter the nearby car.'
+        : 'Walk with WASD or the arrow keys. Approach a car to drive.';
+    if (status.textContent !== message) status.textContent = message;
+    renderer.draw(world, player, vehicles, population, canEnter);
     requestAnimationFrame(frame);
   }
 
-  document.getElementById('status').textContent = `${CITY}. Walk with WASD or the arrow keys.`;
   requestAnimationFrame(frame);
 }
 
 if (params.has('shot')) {
-  const pose = stageShot(params.get('shot'), world);
+  const pose = stageShot(params.get('shot'), world, vehicles, updatePopulation);
   requestAnimationFrame(() => {
-    renderer.draw(world, pose);
+    renderer.draw(world, pose, vehicles, population);
     requestAnimationFrame(() => {
-      renderer.draw(world, pose);
+      renderer.draw(world, pose, vehicles, population);
       window.__shotReady = true;
     });
   });
