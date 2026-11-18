@@ -1,4 +1,4 @@
-const crimes = { theft: 1, traffic: 1, pedestrian: 2, melee: 1 };
+const crimes = { theft: 1, vehicleRecovery: 1, traffic: 1, pedestrian: 2, melee: 1 };
 const searchFrames = 420;
 export const ARREST_FRAMES = 150;
 

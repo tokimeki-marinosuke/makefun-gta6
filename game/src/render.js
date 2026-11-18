@@ -1,7 +1,9 @@
-import { CITY, CITY_GRID, PALETTE, VIEW } from './config.js';
+import { CITY_GRID, PALETTE, VIEW } from './config.js';
 import { drawCharacter } from './character.js';
+import { drawMissionMarker } from './mission-render.js';
 import { CAR } from './vehicles.js';
-import { ARREST_FRAMES } from './wanted.js';
+import { drawHud } from './hud.js';
+import { drawTitleBackdrop } from './title.js';
 
 const { columns, rows, tile, road } = CITY_GRID;
 const roofs = ['#e8a68b', '#f1d3a1', '#c1d7c6', '#c9b5cd', '#d9b394'];
@@ -223,40 +225,7 @@ export function createRenderer(canvas) {
     ctx.restore();
   }
 
-  function hud(world, player, driving, canEnter, live) {
-    const area = player.y >= world.cityEnd ? 'Sundial Beach'
-      : Math.hypot(player.x - world.locations.plaza.x, player.y - world.locations.plaza.y) < 145
-        ? 'Meridian Observatory' : 'Meridian District';
-    rect(18, 17, 210, 62, '#27374bed');
-    rect(18, 17, 3, 62, '#ffd388');
-    star(39, 41, 8, '#ffd388');
-    label(CITY, 55, 47, 'bold 20px system-ui', '#fff1d7');
-    label(area, 36, 66, '13px system-ui', '#f7dfbe');
-
-    const map = { x: VIEW.width - 128, y: 18, w: 110, h: 103 };
-    rect(map.x - 4, map.y - 4, map.w + 8, map.h + 8, '#27374bed');
-    rect(map.x, map.y, map.w, map.h, '#bcab97');
-    const mx = (x) => map.x + x / world.width * map.w;
-    const my = (y) => map.y + y / world.height * map.h;
-    rect(map.x, my(world.cityEnd), map.w, my(world.waterline) - my(world.cityEnd), PALETTE.sand);
-    rect(map.x, my(world.waterline), map.w, my(world.height) - my(world.waterline), PALETTE.sea);
-    for (const block of world.blocks) {
-      rect(mx(block.x), my(block.y), block.size / world.width * map.w,
-        block.size / world.height * map.h, block.kind === 'buildings' ? '#596878' : '#799581');
-    }
-    star(mx(world.locations.plaza.x + 75), my(world.locations.plaza.y), 5, '#ffe39c');
-    ellipse(mx(player.x), my(player.y), 4, 4, PALETTE.ink);
-    ellipse(mx(player.x), my(player.y), 2.4, 2.4, '#fff4d8');
-
-    const actions = live ? '  ·  F SHOVE' : '';
-    const controls = driving ? 'WASD / ARROW KEYS  ·  E EXIT'
-      : (canEnter ? 'WASD / ARROW KEYS  ·  E ENTER' : 'WASD / ARROW KEYS') + actions;
-    ctx.font = '600 12px system-ui';
-    rect(18, VIEW.height - 42, ctx.measureText(controls).width + 22, 24, '#27374bed');
-    label(controls, 29, VIEW.height - 26, '600 12px system-ui', '#fff1d7');
-  }
-
-  function draw(world, player, { cars, active }, { traffic, pedestrians }, canEnter, wanted, patrols) {
+  function draw(world, player, { cars, active }, { traffic, pedestrians }, { canEnter, wanted, patrols, mission, health, cash, titleCamera }) {
     const target = active ?? player;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     rect(0, 0, canvas.width, canvas.height, PALETTE.backdrop);
@@ -265,7 +234,7 @@ export function createRenderer(canvas) {
     ctx.beginPath();
     ctx.rect(0, 0, VIEW.width, VIEW.height);
     ctx.clip();
-    const { x: cameraX, y: cameraY } = cameraPosition(world, target);
+    const { x: cameraX, y: cameraY } = cameraPosition(world, titleCamera ?? target);
     ctx.save();
     ctx.translate(-cameraX, -cameraY);
     roads(world);
@@ -293,18 +262,13 @@ export function createRenderer(canvas) {
     layers.sort((a, b) => a.depth - b.depth);
     for (const layer of layers) layer.draw();
     ctx.restore();
-    hud(world, target, Boolean(active), canEnter, canEnter !== undefined);
-    if (wanted.stars) {
-      const center = VIEW.width / 2;
-      rect(center - 80, 17, 160, 36, '#27374bed');
-      for (let i = 0; i < 5; i += 1) {
-        star(center + (i - 2) * 28, 35, 11, i < wanted.stars ? '#ffd388' : '#6c7483');
-      }
-      if (wanted.arrest) {
-        rect(center - 80, 55, 160, 5, '#27374bed');
-        rect(center - 80, 55, 160 * wanted.arrest / ARREST_FRAMES, 5, '#ff6179');
-      }
+    if (titleCamera) {
+      drawTitleBackdrop(ctx);
+      ctx.restore();
+      return;
     }
+    if (mission?.marker) drawMissionMarker(ctx, mission.marker, { x: cameraX, y: cameraY }, target);
+    drawHud(ctx, world, target, { driving: Boolean(active), canEnter, wanted, mission, health, cash });
     if (wanted.busted) {
       rect(0, 0, VIEW.width, VIEW.height, '#1c2236dc');
       label('BUSTED', VIEW.width / 2, VIEW.height / 2, 'bold 62px system-ui', '#ff7282', 'center');

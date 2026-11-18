@@ -1,6 +1,7 @@
 const horizontal = [['KeyA', 'ArrowLeft'], ['KeyD', 'ArrowRight']];
 const vertical = [['KeyW', 'ArrowUp'], ['KeyS', 'ArrowDown']];
-const gameKeys = new Set([...horizontal.flat(), ...vertical.flat(), 'KeyE', 'KeyF']);
+const actionKeys = new Set(['KeyE', 'KeyF', 'Space']);
+const gameKeys = new Set([...horizontal.flat(), ...vertical.flat(), ...actionKeys]);
 
 export function createInput() {
   const held = new Set();
@@ -8,7 +9,7 @@ export function createInput() {
   window.addEventListener('keydown', (event) => {
     if (!gameKeys.has(event.code) || event.ctrlKey || event.metaKey || event.altKey) return;
     event.preventDefault();
-    if ((event.code === 'KeyE' || event.code === 'KeyF') && !event.repeat && !held.has(event.code)) pressed.add(event.code);
+    if (actionKeys.has(event.code) && !event.repeat && !held.has(event.code)) pressed.add(event.code);
     held.add(event.code);
   });
   window.addEventListener('keyup', (event) => held.delete(event.code));
@@ -29,6 +30,7 @@ export function createInput() {
   return {
     direction: () => ({ x: axis(horizontal), y: axis(vertical) }),
     takeInteract: () => pressed.delete('KeyE'),
+    takeStory: () => pressed.delete('Space'),
     takeMelee: () => pressed.delete('KeyF'),
   };
 }

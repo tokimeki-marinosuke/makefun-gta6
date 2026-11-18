@@ -1,10 +1,13 @@
 import { DEFAULT_SEED, PLAYER, STEP, VIEW } from './config.js';
 import { createInput } from './input.js';
+import { MISSION_COUNT, advanceStory, checkMission, createMissions, missionDisplay, startMission } from './missions.js';
 import { createPedestrians, knockDown, updatePedestrians } from './pedestrians.js';
 import { createPolice, updatePolice } from './police.js';
 import { createWanted, reportCrime, updateWanted } from './wanted.js';
 import { createRandom } from './random.js';
 import { cameraPosition, createRenderer } from './render.js';
+import { loadSave, writeSave } from './save.js';
+import { showTitle } from './title.js';
 import { stageShot } from './shots.js';
 import { createTraffic, updateTraffic } from './traffic.js';
 import { createVehicles, drive, nearbyCar, toggleVehicle, touchesCar } from './vehicles.js';
@@ -22,6 +25,9 @@ let wanted;
 let police;
 let contacts;
 const status = document.getElementById('status');
+let missions;
+let health;
+let damageCooldown;
 
 function reset() {
   Object.assign(player, world.spawn, { swing: 0 });
@@ -29,13 +35,14 @@ function reset() {
   wanted = createWanted();
   police = createPolice();
   contacts = new Set();
+  health = 100;
+  damageCooldown = 0;
   population = {
     traffic: createTraffic(vehicles, createRandom(seed ^ 0x41c64e6d)),
     pedestrians: createPedestrians(world, createRandom(seed ^ 0x9e3779b9)),
   };
+  if (missions) startMission(missions, world, vehicles, wanted, player);
 }
-
-reset();
 
 function walk({ x, y }) {
   const length = Math.hypot(x, y);
@@ -73,14 +80,24 @@ function melee() {
   reportCrime(wanted, 'melee', player);
 }
 
+function takeDamage(amount) {
+  if (damageCooldown) return;
+  health = Math.max(0, health - amount);
+  damageCooldown = 45;
+}
+
 function updateContacts(impact, moved) {
   const car = vehicles.active;
   const target = car ?? player;
   const overlapping = new Set();
-  for (const other of population.traffic) {
+  for (const other of [...vehicles.cars, ...population.traffic, ...police.cars]) {
+    if (other === car) continue;
     if (other === impact || (!car && touchesCar(other, player, PLAYER.radius))) {
       overlapping.add(other);
-      if (!contacts.has(other) && (moved || impact)) reportCrime(wanted, 'traffic', target);
+      if (!contacts.has(other)) {
+        takeDamage(25);
+        if (population.traffic.includes(other) && (moved || impact)) reportCrime(wanted, 'traffic', target);
+      }
     }
   }
   for (const person of population.pedestrians) {
@@ -88,7 +105,9 @@ function updateContacts(impact, moved) {
       : Math.hypot(person.x - player.x, person.y - player.y) < 15;
     if (!touching) continue;
     overlapping.add(person);
-    if (contacts.has(person) || !moved || person.down) continue;
+    if (contacts.has(person) || person.down) continue;
+    takeDamage(10);
+    if (!moved) continue;
     reportCrime(wanted, 'pedestrian', target);
     if (car) knockDown(person, target);
   }
@@ -102,17 +121,24 @@ function pursue(pose) {
   updateWanted(wanted, target, visible, restrained);
 }
 
-function draw(pose, canEnter) {
-  renderer.draw(world, pose, vehicles, population, canEnter, wanted, police.cars);
+function draw(pose, canEnter, titleCamera) {
+  const view = missionDisplay(missions, world, vehicles.active, wanted);
+  renderer.draw(world, pose, vehicles, population, {
+    canEnter, wanted, patrols: police.cars, mission: view, health, cash: missions?.cash ?? 0, titleCamera,
+  });
 }
 
 function tick(input, direction) {
+  const advance = input.takeStory();
   const interact = input.takeInteract();
   const attack = input.takeMelee();
   if (wanted.busted) {
     if (--wanted.busted === 0) reset();
     return;
   }
+  const wasEnding = missions.ending;
+  advanceStory(missions, world, vehicles, wanted, player, advance);
+  if (wasEnding || missions.ending) return;
   if (player.swing) player.swing -= 1;
   if (interact) {
     const car = toggleVehicle(world, vehicles, player, [...population.traffic, ...police.cars]);
@@ -127,9 +153,16 @@ function tick(input, direction) {
   let impact;
   if (vehicles.active) impact = drive(world, vehicles, direction, [...population.traffic, ...police.cars]);
   else walk(direction);
+  if (damageCooldown) damageCooldown -= 1;
   updateContacts(impact, target.x !== x || target.y !== y);
+  if (health === 0) {
+    reset();
+    return;
+  }
   updatePopulation(player);
   pursue(player);
+  const checkpoint = checkMission(missions, world, vehicles, wanted, player);
+  if (checkpoint) writeSave(checkpoint);
 }
 
 function runGame() {
@@ -152,7 +185,12 @@ function runGame() {
         : 'Walk with WASD or the arrow keys. Approach a car to drive.') +
       (vehicles.active ? '' : ' Press F to shove.') +
       (wanted.stars ? ` Wanted level ${wanted.stars} of 5.` : '');
-    if (status.textContent !== message) status.textContent = message;
+    const view = missionDisplay(missions, world, vehicles.active, wanted);
+    const missionMessage = view.ending ? '流星群が見られた。スペースで自由走行へ。'
+      : [view.objective, view.story?.heading, view.story?.text].filter(Boolean).join('。');
+    const announcement = wanted.busted ? message
+      : [message, `HP ${health} of 100. Cash $${missions.cash}.`, missionMessage].filter(Boolean).join(' ');
+    if (status.textContent !== announcement) status.textContent = announcement;
     draw(player, canEnter);
     requestAnimationFrame(frame);
   }
@@ -160,9 +198,14 @@ function runGame() {
   requestAnimationFrame(frame);
 }
 
+reset();
+
 if (params.has('shot')) {
   const pose = stageShot(params.get('shot'), world, vehicles, updatePopulation, {
     startPursuit(car) {
+      missions = createMissions({ completed: [1, 2], cash: 350 });
+      startMission(missions, world, vehicles, wanted, car);
+      missions.story = null;
       reportCrime(wanted, 'theft', car);
       reportCrime(wanted, 'pedestrian', car);
     },
@@ -176,5 +219,22 @@ if (params.has('shot')) {
     });
   });
 } else {
-  runGame();
+  const save = loadSave(MISSION_COUNT);
+  const menu = document.getElementById('title-menu');
+  let startTime;
+  function titleFrame(now) {
+    if (menu.hidden) return;
+    startTime ??= now;
+    const phase = (now - startTime) / 1000;
+    const camera = { x: 740 + 245 * Math.sin(phase / 11), y: 650 + 125 * Math.sin(phase / 15) };
+    draw(player, undefined, camera);
+    requestAnimationFrame(titleFrame);
+  }
+  showTitle(menu, Boolean(save), (resume) => {
+    missions = createMissions(resume ? save : undefined);
+    if (!resume) writeSave({ completed: [], cash: 0 });
+    reset();
+    runGame();
+  });
+  requestAnimationFrame(titleFrame);
 }

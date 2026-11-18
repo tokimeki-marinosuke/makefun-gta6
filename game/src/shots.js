@@ -3,7 +3,7 @@ import { drive } from './vehicles.js';
 
 // Each pose uses the same camera and renderer as free exploration.
 export function stageShot(name, world, vehicles, updatePopulation, chase) {
-  if (name === 'start' || name === 'start-traffic') {
+  if (name === 'downtown' || name === 'start' || name === 'start-traffic') {
     for (let tick = 0; tick < 90; tick += 1) updatePopulation(world.spawn);
     return world.spawn;
   }
