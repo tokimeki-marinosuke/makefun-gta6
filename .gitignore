@@ -1,23 +1,26 @@
-# Dependencies
+# Node.js の依存パッケージ
 node_modules/
 
-# Local Codex home: credentials, auth.json, session recordings
-.codex/
+# ローカルの Codex ホーム（認証情報とセッション記録）
+/.codex/
 
-# Run ledgers, event logs, last-message files
-runs/
+# 実行台帳とイベントログ
+/runs/
 
-# Smoke-test artifacts
-smoke_test/
+# スモークテストの生成物
+/smoke_test/
 
-# Build / grader output
-output/
-dist/
+# ビルドと採点の出力
+/dist/
+/output/
+/out/
 
-# Secrets and local config
+# 秘密情報とローカル設定
 .env
 .env.*
 
-# Misc
+# ログと OS が生成するファイル
 *.log
 .DS_Store
+Thumbs.db
+Desktop.ini
